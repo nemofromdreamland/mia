@@ -16,7 +16,8 @@ import yaml
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from langchain_core.runnables.retry import ExponentialJitterParams
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 
 from mia.schemas import RunRecord
 
@@ -26,6 +27,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODELS_PATH = REPO_ROOT / "config" / "models.yaml"
 DEFAULT_RUNS_DIR = REPO_ROOT / "runs"
 NO_EXPERIMENT = "adhoc"  # file name part when experiment is None
+
+# Wait between retries: exponential backoff from 1 s up to 20 s, plus random jitter
+# (covers Groq free-tier 429s). Tests replace it with zeros so they never sleep.
+RETRY_WAIT: ExponentialJitterParams = {"initial": 1.0, "max": 20.0}
 
 # Our provider names (RunRecord.provider) -> LangChain's model_provider names.
 LANGCHAIN_PROVIDERS: dict[Provider, str] = {
@@ -50,6 +55,7 @@ class ModelSpec(BaseModel):
     usd_per_mtok_input: float = Field(ge=0)
     usd_per_mtok_output: float = Field(ge=0)
     free_tier: bool = False  # True: free usage; price is the published paid rate (reference)
+    max_retries: StrictInt = Field(default=2, ge=0)  # extra attempts after the first call
 
 
 class ModelsConfig(BaseModel):
@@ -193,9 +199,16 @@ def invoke(
         "created_at": datetime.now(UTC),
     }
 
+    # One RunRecord per invoke: retries are internal and their waits count as latency.
+    runnable = llm.with_retry(
+        stop_after_attempt=spec.max_retries + 1,
+        wait_exponential_jitter=True,
+        exponential_jitter_params=RETRY_WAIT,
+    )
+
     started = time.perf_counter()
     try:
-        response = llm.invoke([SystemMessage(system), HumanMessage(user)])
+        response = runnable.invoke([SystemMessage(system), HumanMessage(user)])
     except Exception as exc:
         failed = RunRecord(
             **record,

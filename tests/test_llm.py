@@ -1,3 +1,4 @@
+import importlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,12 @@ SRC_DIR = Path(__file__).parents[1] / "src" / "mia"
 @pytest.fixture
 def cfg() -> ModelsConfig:
     return load_models_config(FIXTURE_MODELS)
+
+
+@pytest.fixture(autouse=True)
+def no_retry_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Retries happen instantly in tests (no sleeping between attempts)."""
+    monkeypatch.setattr(llm, "RETRY_WAIT", {"initial": 0, "max": 0, "jitter": 0})
 
 
 def _write_config(tmp_path: Path, text: str) -> Path:
@@ -174,6 +181,36 @@ def test_real_models_config_uses_haiku_geo_pricing() -> None:
     assert estimate_cost(spec, 0, 1_000_000) == pytest.approx(5.50)
 
 
+# --- max_retries (0.6 R1) ----------------------------------------------------
+
+
+def test_max_retries_defaults_to_two_and_reads_explicit_value(cfg: ModelsConfig) -> None:
+    assert cfg.models["gemini:test-flash"].max_retries == 2
+    assert cfg.models["groq:openai/test-oss"].max_retries == 4
+
+
+@pytest.mark.parametrize("value", ["-1", '"x"', "1.5"])
+def test_max_retries_rejects_invalid_value_naming_file_and_field(
+    tmp_path: Path, value: str
+) -> None:
+    path = _write_config(
+        tmp_path,
+        'default: "gemini:x"\nmodels:\n'
+        '  "gemini:x": {usd_per_mtok_input: 0.1, usd_per_mtok_output: 0.4, '
+        f"max_retries: {value}}}\n",
+    )
+
+    with pytest.raises(ModelConfigError) as exc_info:
+        load_models_config(path)
+
+    assert str(path) in str(exc_info.value)
+    assert "max_retries" in str(exc_info.value)
+
+
+def test_real_models_config_gives_groq_more_retries() -> None:
+    assert load_models_config().models["groq:openai/gpt-oss-120b"].max_retries == 4
+
+
 # --- resolve_model (R3) ------------------------------------------------------
 
 
@@ -231,6 +268,34 @@ def test_build_chat_model_calls_init_chat_model_with_langchain_provider(
     assert calls == [((expected_model,), {"model_provider": expected_provider, "temperature": 0.2})]
 
 
+@pytest.mark.parametrize(
+    ("ref", "class_path"),
+    [
+        ("bedrock:anthropic.claude-x-v1:0", "langchain_aws.ChatBedrockConverse"),
+        ("gemini:test-flash", "langchain_google_genai.ChatGoogleGenerativeAI"),
+        ("groq:openai/test-oss", "langchain_groq.ChatGroq"),
+    ],
+)
+def test_build_chat_model_returns_real_class_for_provider_without_network(
+    cfg: ModelsConfig, monkeypatch: pytest.MonkeyPatch, ref: str, class_path: str
+) -> None:
+    # Fake credentials only: building a client must not call the provider.
+    for name, value in {
+        "GOOGLE_API_KEY": "fake-google",
+        "GROQ_API_KEY": "fake-groq",
+        "AWS_ACCESS_KEY_ID": "fake-id",
+        "AWS_SECRET_ACCESS_KEY": "fake-secret",
+        "AWS_REGION": "us-east-1",
+        "AWS_DEFAULT_REGION": "us-east-1",
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("AWS_PROFILE", raising=False)
+    module_name, class_name = class_path.rsplit(".", 1)
+    expected = getattr(importlib.import_module(module_name), class_name)
+
+    assert isinstance(build_chat_model(cfg.models[ref], {"temperature": 0}), expected)
+
+
 def test_only_llm_module_touches_langchain_models_or_provider_packages() -> None:
     forbidden = ("init_chat_model", "langchain_aws", "langchain_google", "langchain_groq")
     offenders = [
@@ -250,6 +315,20 @@ class _FailingChatModel(GenericFakeChatModel):
 
     def _generate(self, *args: Any, **kwargs: Any) -> Any:
         raise RuntimeError("boom")
+
+
+class _FlakyChatModel(GenericFakeChatModel):
+    """Fake provider that fails the first `failures` calls, then answers."""
+
+    failures: int = 0
+    message: str = "boom"
+    calls: int = 0
+
+    def _generate(self, *args: Any, **kwargs: Any) -> Any:
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise RuntimeError(self.message)
+        return super()._generate(*args, **kwargs)
 
 
 def _fake_model(*replies: str | AIMessage) -> GenericFakeChatModel:
@@ -455,3 +534,67 @@ def test_invoke_defaults_load_real_config_and_build_model_from_it(
     assert built == [(default.model, {"model_provider": "google_genai", "temperature": 0})]
     (record,) = _read_records(_today_file(tmp_path, "adhoc"))
     assert record.cost_usd == estimate_cost(default, 1000, 1000)
+
+
+# --- retry (0.6 R2, R3) ------------------------------------------------------
+
+
+def test_invoke_retries_then_succeeds_with_a_single_success_record(
+    cfg: ModelsConfig, tmp_path: Path
+) -> None:
+    model = _FlakyChatModel(messages=iter([_reply("ok")]), failures=1, message="429")
+
+    text = _invoke(cfg, tmp_path, model)
+
+    assert text == "ok"
+    assert model.calls == 2
+    (record,) = _read_records(_today_file(tmp_path, "test"))
+    assert record.error is None
+    assert record.output_raw == "ok"
+
+
+def test_invoke_retry_latency_includes_the_waits(
+    cfg: ModelsConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Clock:
+        ticks = iter([10.0, 12.5])  # start, end: 2.5 s around the whole retried call
+
+        @staticmethod
+        def perf_counter() -> float:
+            return next(Clock.ticks)
+
+    monkeypatch.setattr(llm, "time", Clock)
+    _invoke(cfg, tmp_path, _FlakyChatModel(messages=iter([_reply("ok")]), failures=1))
+
+    (record,) = _read_records(_today_file(tmp_path, "test"))
+    assert record.latency_ms == 2500
+
+
+@pytest.mark.parametrize(
+    ("ref", "expected_calls"),
+    [("gemini:test-flash", 3), ("groq:openai/test-oss", 5)],  # max_retries 2 and 4
+)
+def test_invoke_gives_up_after_max_retries_and_records_last_error(
+    cfg: ModelsConfig, tmp_path: Path, ref: str, expected_calls: int
+) -> None:
+    model = _FlakyChatModel(messages=iter([]), failures=99)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        _invoke(cfg, tmp_path, model, model=ref)
+
+    assert model.calls == expected_calls
+    (record,) = _read_records(_today_file(tmp_path, "test"))
+    assert record.error == "RuntimeError: boom"
+
+
+def test_invoke_without_retries_calls_model_once(cfg: ModelsConfig, tmp_path: Path) -> None:
+    spec = cfg.models["gemini:test-flash"].model_copy(update={"max_retries": 0})
+    no_retry = cfg.model_copy(update={"models": {**cfg.models, "gemini:test-flash": spec}})
+    model = _FlakyChatModel(messages=iter([]), failures=99)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        _invoke(no_retry, tmp_path, model)
+
+    assert model.calls == 1
+    (record,) = _read_records(_today_file(tmp_path, "test"))
+    assert record.error == "RuntimeError: boom"

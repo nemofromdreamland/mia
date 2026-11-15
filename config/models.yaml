@@ -3,6 +3,7 @@
 # Prices: USD per 1M tokens, standard on-demand (non-batch) rate, us-east-1 for Bedrock.
 # free_tier: true = we use the provider's free tier; the price is the published PAID rate,
 # kept as a reference cost so model-vs-model cost comparisons stay fair.
+# max_retries: extra attempts after a failed call (default 2), with exponential backoff.
 #
 # Sources, checked on 2026-11-15:
 #   gemini  https://ai.google.dev/gemini-api/docs/pricing
@@ -25,6 +26,7 @@ models:
     usd_per_mtok_input: 0.15
     usd_per_mtok_output: 0.60
     free_tier: true
+    max_retries: 4 # free tier: 8,000 tokens/min, so 429s are common (TRD)
 
   # US cross-region inference profile ("us." prefix): 10% premium over the global rate.
   "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0":

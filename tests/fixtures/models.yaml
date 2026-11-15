@@ -12,3 +12,4 @@ models:
     usd_per_mtok_input: 0.15
     usd_per_mtok_output: 0.60
     free_tier: true
+    max_retries: 4
