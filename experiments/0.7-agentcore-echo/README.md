@@ -18,4 +18,21 @@ Em outro terminal, teste com qualquer cliente WebSocket em `ws://localhost:8080/
 
 ## Na AWS
 
-O deploy e a remoção acontecem nos passos 2 e 3 da spec, sempre com confirmação. O cliente de teste é `scripts/agentcore_echo_client.py`.
+Roteiro usado na tarefa (detalhes e evidências nas Notas da spec). Cada comando que cria ou apaga recurso precisa de confirmação.
+
+```bash
+# num diretório de caminho curto (limite de 260 caracteres do Windows); exige uv >= 0.13
+npx @aws/agentcore@1.0.3 create --name MiaEcho07 --template agent-python-minimal --skip-git
+cp main.py MiaEcho07/app/agent/main.py
+cd MiaEcho07 && AWS_PROFILE=mia npx @aws/agentcore@1.0.3 deploy --region us-east-1
+AWS_PROFILE=mia npx @aws/agentcore@1.0.3 status --json --region us-east-1   # pega o ARN
+uv run python scripts/agentcore_echo_client.py --arn <ARN>                 # na raiz do MIA
+
+# remoção
+npx @aws/agentcore@1.0.3 remove all --yes && npx @aws/agentcore@1.0.3 deploy --yes
+# depois: esvaziar e apagar o bucket cdk-hnb659fds-assets-*, apagar a stack CDKToolkit,
+# reverter o Transaction Search (aws xray update-trace-segment-destination --destination XRay)
+# e apagar os log groups criados
+```
+
+Atenção: o `deploy` cria a stack `CDKToolkit` (com chave KMS e bucket retido) e ativa o CloudWatch Transaction Search na conta.
