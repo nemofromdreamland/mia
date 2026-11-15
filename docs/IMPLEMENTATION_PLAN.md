@@ -16,7 +16,7 @@ Tudo que depende da AWS fica pronto até segunda à noite; terça fica só para 
 | --- | --- | --- |
 | Dom 15, 12h | Gate 0 decidido: Bedrock, AgentCore e Sonic testados | Aplicar os planos B do TRD e seguir |
 | Dom 15, 23h | Entrevista completa em texto pelo terminal (`mia simulate`) com relatório | Cortar o relatório em LangGraph para uma chamada só |
-| Seg 16, 14h | Baseline v1 rodada nos modelos do Bedrock, salva em `runs/` | Rodar só Haiku + Nova; resto depois com Gemini/OpenAI |
+| Seg 16, 14h | Baseline v1 rodada nos modelos do Bedrock, salva em `runs/` | Rodar só Haiku + Nova; resto depois com Gemini/Groq |
 | Seg 16, 23h | Modo texto no ar com URL | Plano B (Lambda + API Gateway) ou demo local gravada |
 | Ter 17, manhã | Vídeo de demo gravado; `runs/` e resultados commitados | — (obrigatório) |
 | Ter 17, tarde | Voz, se o Gate 0 aprovou | Voz fica fora |
@@ -44,7 +44,7 @@ flowchart TD
     F4 --> GF{"Free Plan fecha · 17/11"}
     F4 -. "se o Gate 0 aprovou" .-> F5["Fase 5 · Voz<br/>condicional · ter 17"]
     F5 --> GF
-    GF --> F6["Fase 6 · Depois de terça<br/>Gemini/OpenAI, HF Spaces, README"]
+    GF --> F6["Fase 6 · Depois de terça<br/>Gemini/Groq, HF Spaces, README"]
 ```
 
 A Fase 1 é o gargalo: Avaliação e API só começam com o cérebro rodando no terminal. A 4.1 (tabelas e buckets em Terraform) pode adiantar para domingo à noite se a Fase 3 precisar de DynamoDB real.
@@ -56,11 +56,11 @@ Objetivo: descobrir em poucas horas se Bedrock, AgentCore e Sonic funcionam nest
 | ID | Tarefa | Quem | Entrega | Pronto quando |
 | --- | --- | --- | --- | --- |
 | 0.1 | Console AWS: data do fim do Free Plan, MFA no root, usuário IAM `mia-dev`, alertas de Budget, região us-east-1 | Você | Perfil `mia` na AWS CLI | `aws sts get-caller-identity --profile mia` responde |
-| 0.2 | Testar Claude Haiku, Nova Lite e Llama no playground do Bedrock | Você | — | Os três respondem (ou formulário da Anthropic enviado) |
-| 0.3 | Chaves Gemini (AI Studio) e OpenAI (US$ 5, auto-reload desligado) | Você | `.env` local | Chaves no `.env`, nunca no git |
+| 0.2 | Testar Claude Haiku, Nova Lite e Mistral Large 3 no playground do Bedrock. Nota: Llama descartado: Legacy no Bedrock desde 30/09/2026 | Você | — | Os três respondem (ou formulário da Anthropic enviado) |
+| 0.3 | Chaves Gemini (AI Studio) e Groq (grátis, sem cartão) | Você | `.env` local | Chaves no `.env`, nunca no git |
 | 0.4 | Esqueleto do repositório: `uv`, Ruff, pytest, `.gitignore`, `.env.example`, `docs/` com os 7 documentos (incluindo `CASES.md`), `AGENTS.md` | Agente | Repo `mia/` no GitHub | `uv run pytest` e `uv run ruff check` passam vazios |
 | 0.5 | `llm.py` mínimo: `init_chat_model` por config, registro de cada chamada em `runs/*.jsonl` (`RunRecord`) | Agente | `src/mia/llm.py`, `config/models.yaml` | Teste unitário grava um `RunRecord` válido |
-| 0.6 | Smoke test de provedores: mesmo prompt em Claude Haiku, Nova Lite, Llama (Bedrock), Gemini Flash e OpenAI mini | Agente | `scripts/smoke_providers.py` | 5 linhas em `runs/` com tokens, latência e custo |
+| 0.6 | Smoke test de provedores: mesmo prompt em Claude Haiku, Nova Lite, Mistral Large 3 (Bedrock; ID a confirmar na tarefa 0.6), Gemini Flash e gpt-oss-120b (Groq) | Agente | `scripts/smoke_providers.py` | 5 linhas em `runs/` com tokens, latência e custo |
 | 0.7 | AgentCore: subir o exemplo oficial de WebSocket (echo) | Você + agente | Runtime de teste | Navegador ou script recebe o eco; runtime apagado depois |
 | 0.8 | Sonic em português: rodar o exemplo oficial local por ~15 min, com fone | Você | Notas de latência e qualidade | Decisão registrada: voz entra ou não |
 
@@ -89,7 +89,7 @@ Os repositórios de dados têm uma interface e duas implementações (memória e
 
 ## Fase 2: avaliação
 
-Objetivo: a baseline v1 nos modelos do Bedrock salva antes de segunda 14h; iterações v2 podem continuar depois com Gemini/OpenAI. Pode rodar em paralelo com a Fase 3.
+Objetivo: a baseline v1 nos modelos do Bedrock salva antes de segunda 14h; iterações v2 podem continuar depois com Gemini/Groq. Pode rodar em paralelo com a Fase 3.
 
 | ID | Tarefa | Quem | Entrega | Pronto quando |
 | --- | --- | --- | --- | --- |
@@ -99,7 +99,7 @@ Objetivo: a baseline v1 nos modelos do Bedrock salva antes de segunda 14h; itera
 | 2.4 | Conjuntos B (~40 momentos de ferramenta), C (vagas + CVs sintéticos) e D (injections) | Agente | `evals/datasets/*.jsonl` | Cada conjunto com `expected` e `split` |
 | 2.5 | Promptfoo com custom provider em Python chamando `src/mia` e assertions em Python | Agente | `evals/promptfooconfig.yaml`, `evals/assertions/` | `npx promptfoo eval` roda o conjunto A em um modelo |
 | 2.6 | Métricas agregadas: kappa ponderado, erro médio, % ±1, viés de verbosidade, consistência, JSON válido, custo, p95 | Agente | `evals/metrics.py` | Gera `results/<experimento>.md` com as tabelas |
-| 2.7 | Baseline v1 no Bedrock: Claude Haiku, Claude Sonnet ou Nova Pro, Llama; conjuntos A e B | Agente | `runs/`, `results/baseline_v1.md` | Commitado antes de seg 14h |
+| 2.7 | Baseline v1 no Bedrock: Claude Haiku, Claude Sonnet ou Nova Pro, Mistral Large 3; conjuntos A e B | Agente | `runs/`, `results/baseline_v1.md` | Commitado antes de seg 14h |
 | 2.8 | Conjunto D com e sem Bedrock Guardrails (guardrail criado via boto3 ou console) | Agente | `results/robustez_v1.md` | Taxa de ataques que funcionaram nos dois cenários |
 | 2.9 | Prompt v2 do juiz ajustado só no split dev; resultado reportado no teste | Você + agente | `prompts/judge/v2.yaml`, `results/judge_v1_vs_v2.md` | Tabela v1 × v2 incluindo o que piorou |
 | 2.10 | Conjunto A em modo rápido no CI, com respostas gravadas (sem chamar modelo) | Agente | `tests/test_eval_regression.py` | Roda em menos de 1 min no GitHub Actions |
@@ -155,11 +155,11 @@ Só começa se o Gate 0 aprovou o Sonic e a Fase 4 está no ar. Se a URL de voz 
 
 ## Fase 6: depois de terça
 
-Sem prazo e sem AWS: tudo roda com Gemini, OpenAI e Groq. É aqui que o projeto vira portfólio.
+Sem prazo e sem AWS: tudo roda com Gemini e Groq. É aqui que o projeto vira portfólio.
 
 | ID | Tarefa | Quem | Entrega | Pronto quando |
 | --- | --- | --- | --- | --- |
-| 6.1 | Iterações v2/v3 dos prompts com Gemini e OpenAI; comparação entre provedores | Você + agente | `results/*.md` | Tabela com todos os modelos testados, incluindo os do Bedrock salvos antes |
+| 6.1 | Iterações v2/v3 dos prompts com Gemini e Groq; comparação entre provedores | Você + agente | `results/*.md` | Tabela com todos os modelos testados, incluindo os do Bedrock salvos antes |
 | 6.2 | Red-team do Promptfoo no conjunto D | Agente | `results/redteam.md` | Taxa de ataques que funcionaram por categoria |
 | 6.3 | Versão permanente no Hugging Face Spaces: modo texto, os 5 casos, repositório em memória, Gemini, mesmas cotas | Agente | Space público | Recrutador consegue fazer uma simulação pelo link |
 | 6.4 | README: objetivo, arquitetura, método, resultados, limitações, modelo de ameaças, vídeo | Você + agente | `README.md` | Explicável em 2 minutos com números |

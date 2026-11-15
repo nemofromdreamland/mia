@@ -26,7 +26,7 @@ MIA (Mock Interview Assistant) é um simulador de entrevistas de emprego com IA.
 2. Deixar a demo testável em menos de 1 minuto, sem login: escolher caso → entrevista → relatório → tela do recrutador.
 3. Gerar feedback confiável: notas do juiz com concordância medida contra a nota humana e evidências que existem literalmente na resposta.
 4. Provar engenharia de prompts com números: prompts versionados, experimentos v1 × v2 em conjunto fixo, comparação entre modelos (qualidade, custo, latência), incluindo o que piorou.
-5. Funcionar com qualquer provedor: Bedrock, Gemini e OpenAI pela mesma camada (LangChain), sem mudar a lógica do app.
+5. Funcionar com qualquer provedor: Bedrock, Gemini e Groq pela mesma camada (LangChain), sem mudar a lógica do app.
 6. Manter o custo sob controle numa demo aberta: cotas diárias e interruptor para pausar.
 7. Manter uma versão permanente no ar depois que a conta AWS fechar.
 
@@ -127,7 +127,7 @@ Os valores abaixo são metas iniciais; a fase 0 mede os reais e ajusta.
 | RNF-04 | Segurança | Todo texto digitado é tratado como dado não confiável; injection não altera nota, resumo nem instruções |
 | RNF-05 | Abuso | Throttling no API Gateway, cotas diárias no DynamoDB, limites por sessão, interruptor da demo |
 | RNF-06 | Justiça | Resumo e nota baseados só nas respostas; sem atributos pessoais; mesmo plano para todos de um caso |
-| RNF-07 | Portabilidade | Trocar de provedor (Bedrock, Gemini, OpenAI) é só configuração |
+| RNF-07 | Portabilidade | Trocar de provedor (Bedrock, Gemini, Groq) é só configuração |
 | RNF-08 | Consistência | Toda saída de LLM validada por schema; taxa de JSON válido na primeira tentativa medida |
 | RNF-09 | Reprodutibilidade | Infra 100% em Terraform; fixtures dos casos e saídas brutas dos experimentos versionadas no repositório |
 | RNF-10 | Rastreabilidade | Cada chamada registra prompt, versão, modelo, tokens, latência e custo |
@@ -153,13 +153,13 @@ O projeto é bem-sucedido quando cada linha abaixo tem um número real no README
 
 ## Premissas, restrições e riscos
 
-**Restrições.** A conta AWS está no Free Plan e fecha na terça (17/11); sem upgrade. Orçamento: créditos AWS restantes + US$ 5 de OpenAI + free tiers de Gemini e Groq. Um desenvolvedor, nível júnior.
+**Restrições.** A conta AWS está no Free Plan e fecha na terça (17/11); sem upgrade. Orçamento: créditos AWS restantes + free tiers de Gemini e Groq. Um desenvolvedor, nível júnior.
 
 **Premissas.** Bedrock responde no Free Plan com cota maior que zero; Gemini free tier tem limite suficiente para os conjuntos de avaliação; o dono rotula manualmente o golden set e revisa os 5 casos.
 
 | Risco | Impacto | Mitigação |
 | --- | --- | --- |
-| Bedrock com cota zero ou bloqueado no Free Plan | Alto | Testar no primeiro passo; cérebro roda com Gemini/OpenAI e a AWS fica só para deploy |
+| Bedrock com cota zero ou bloqueado no Free Plan | Alto | Testar no primeiro passo; cérebro roda com Gemini/Groq e a AWS fica só para deploy |
 | AgentCore indisponível no Free Plan | Médio | Modo texto em Lambda + API Gateway; voz só em demo local gravada |
 | Demo aberta consome os créditos (abuso ou viralização) | Alto | Cotas de 5/visitante e 100/dia, throttling, limites por sessão, interruptor, alertas de Budget |
 | Visitante digita dado pessoal ou ofensivo | Médio | Mascaramento, aviso antes de começar, Guardrails no Bedrock, apagar sessão |
@@ -178,8 +178,8 @@ flowchart LR
     MVP["MVP em texto<br/>Dom 15 – seg 16<br/>Casos, entrevista, juiz<br/>Relatório e recrutador<br/>Conjuntos A–D"]
     DEP["Deploy e voz<br/>Seg 16 – ter 17<br/>Terraform e URL<br/>Vídeo de demo<br/>Voz, se der tempo"]
     GATE{{"Free Plan fecha · 17/11<br/>Deploy, vídeo e runs salvos"}}
-    POS["Depois de terça<br/>Sem prazo<br/>v2 com Gemini/OpenAI<br/>Hugging Face Spaces<br/>README e currículo"]
+    POS["Depois de terça<br/>Sem prazo<br/>v2 com Gemini/Groq<br/>Hugging Face Spaces<br/>README e currículo"]
     F0 --> MVP --> DEP --> GATE --> POS
 ```
 
-A ordem segue a dependência da AWS: o que usa Bedrock, AgentCore ou Sonic precisa estar pronto, gravado e salvo em JSONL antes de terça. O que roda com Gemini/OpenAI continua depois, sem prazo.
+A ordem segue a dependência da AWS: o que usa Bedrock, AgentCore ou Sonic precisa estar pronto, gravado e salvo em JSONL antes de terça. O que roda com Gemini/Groq continua depois, sem prazo.

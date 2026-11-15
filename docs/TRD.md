@@ -10,7 +10,7 @@ O MIA (Mock Interview Assistant) separa um cérebro portátil em Python (LangCha
 
 **Princípios**
 
-1. **Cérebro portátil, casca AWS.** Toda lógica de LLM passa por `llm.py`; trocar Bedrock por Gemini ou OpenAI é configuração. Só voz, Guardrails e infra são específicos da AWS.
+1. **Cérebro portátil, casca AWS.** Toda lógica de LLM passa por `llm.py`; trocar Bedrock por Gemini ou Groq é configuração. Só voz, Guardrails e infra são específicos da AWS.
 2. **Texto primeiro, voz por último.** A voz usa as mesmas ferramentas do modo texto; se cair, o MVP continua inteiro.
 3. **O LLM redige; o código decide.** Validação de schema, checagem de citações e máquina de estados são determinísticas.
 4. **Tudo medido e salvo.** Cada chamada vira uma linha em JSONL; métricas saem desses registros, inclusive depois que a conta AWS fechar.
@@ -36,14 +36,14 @@ flowchart TB
     end
 
     INT <-- "mesmas ferramentas na voz" --> SONIC["Nova 2 Sonic<br/>Voz em tempo real (opcional)"]
-    LLM --> BR["Amazon Bedrock<br/>Claude, Nova, Llama + Guardrails"]
-    LLM --> GO["Gemini e OpenAI<br/>Comparação e pós-terça"]
+    LLM --> BR["Amazon Bedrock<br/>Claude, Nova, Mistral + Guardrails"]
+    LLM --> GO["Gemini e Groq<br/>Comparação e pós-terça"]
     RT --> DDB["DynamoDB<br/>Sessões, turnos, cotas"]
     RT --> S3["Amazon S3<br/>Relatórios e resumos"]
     RT --> RUNS["runs/*.jsonl + Langfuse<br/>Registro de cada chamada"]
 ```
 
-O navegador chama o API Gateway, que aplica throttling e repassa a uma Lambda proxy. A proxy valida o `X-Visitor-Id`, traduz a rota REST para a `action` do contrato `/invocations` e chama o AgentCore com credenciais IAM (SigV4). Para a voz, uma Lambda devolve uma URL assinada do WebSocket do AgentCore. Todos os módulos do cérebro chamam modelos só por `llm.py`; por isso a mesma lógica roda no Bedrock, no Gemini ou na OpenAI.
+O navegador chama o API Gateway, que aplica throttling e repassa a uma Lambda proxy. A proxy valida o `X-Visitor-Id`, traduz a rota REST para a `action` do contrato `/invocations` e chama o AgentCore com credenciais IAM (SigV4). Para a voz, uma Lambda devolve uma URL assinada do WebSocket do AgentCore. Todos os módulos do cérebro chamam modelos só por `llm.py`; por isso a mesma lógica roda no Bedrock, no Gemini ou no Groq.
 
 **Dois fluxos**
 
@@ -57,9 +57,9 @@ Cada linha vira um ADR em `docs/adr/`. O plano B existe para toda escolha nova.
 
 | Camada | Escolha | Por quê | Abrimos mão de | Plano B |
 | --- | --- | --- | --- | --- |
-| Abstração de LLM | LangChain `init_chat_model` | Mesmo código para Bedrock, Gemini, OpenAI; portabilidade exigida pela vaga | Recursos específicos de cada provedor | Converse API direto (só Bedrock) |
+| Abstração de LLM | LangChain `init_chat_model` | Mesmo código para Bedrock, Gemini, Groq; portabilidade exigida pela vaga | Recursos específicos de cada provedor | Converse API direto (só Bedrock) |
 | Orquestração | LangGraph na preparação e na avaliação; máquina de estados simples na entrevista | Fluxos de várias etapas sem pressa; conversa sem latência extra | LangGraph no loop da conversa | Funções Python encadeadas |
-| Modelos | Claude Haiku na conversa; Claude Sonnet ou Nova Pro no relatório; Gemini Flash e OpenAI mini na comparação | Velocidade onde há espera, qualidade onde não há | Um modelo só, mais simples | Só Gemini/OpenAI se o Bedrock falhar |
+| Modelos | Claude Haiku na conversa; Claude Sonnet ou Nova Pro no relatório; Gemini Flash, Mistral Large 3 (Bedrock; ID a confirmar na tarefa 0.6) e gpt-oss-120b (Groq) na comparação | Velocidade onde há espera, qualidade onde não há | Um modelo só, mais simples | Só Gemini/Groq se o Bedrock falhar |
 | Voz | Nova 2 Sonic (fala para fala) + ferramentas | Latência baixa, troca de turno e interrupção nativas | Controle de cada etapa da cascata | Voz fora do escopo |
 | Integração Sonic | Protocolo nativo, partindo do exemplo oficial da AWS | Entender o streaming bidirecional; Strands Bidi ainda é experimental | Velocidade de um framework | Strands BidiAgent |
 | Execução | Bedrock AgentCore Runtime (HTTP + WebSocket), chamado só pelo backend | Serverless, sem custo parado, palavra-chave atual | Documentação abundante | Lambda com FastAPI atrás do mesmo API Gateway (texto); Fargate |
@@ -209,7 +209,7 @@ Tudo em Terraform, região us-east-1, conta no Free Plan sem Organizations e sem
 | Frontend | `aws_s3_bucket` + `aws_cloudfront_distribution` | Site estático |
 | URL assinada do WebSocket | `aws_lambda_function` atrás do mesmo API Gateway | Confere dono, status e cota; devolve URL SigV4 válida por 5 min |
 | Dados | `aws_dynamodb_table` × 3 (on-demand; GSI `by_case`; TTL em `mia-meta`) + `aws_s3_bucket` | Ciclo de vida de 30 dias |
-| Segredos | `aws_ssm_parameter` (SecureString) | Chaves Gemini/OpenAI/Langfuse |
+| Segredos | `aws_ssm_parameter` (SecureString) | Chaves Gemini/Groq/Langfuse |
 | Guardrails | `aws_bedrock_guardrail` | Prompt attack + PII |
 | IAM | roles por componente | Menor privilégio |
 | Alertas | `aws_budgets_budget` | Consumo de créditos |
@@ -238,6 +238,7 @@ Três camadas, da mais simples à mais completa; as duas primeiras existem desde
 - Triagem e plano dos casos gerados uma vez, offline: criar sessão não chama modelo.
 - Modelo rápido e barato no loop da conversa; modelo maior só no relatório.
 - Avaliações com cache do Promptfoo para não repetir chamadas idênticas.
+- Groq no plano gratuito: limite de 8.000 tokens/min e 200.000 tokens/dia. As avaliações no Groq respeitam esse limite (pausa e nova tentativa quando der erro 429).
 - Nada cobrado por hora parada: AgentCore, Lambda, DynamoDB on-demand, S3 e CloudFront.
 
 Custo por sessão e por modelo é métrica do produto (PRD) e aparece na tabela de comparação entre modelos.
@@ -251,14 +252,14 @@ A fase 0 testa o que pode quebrar o plano antes de escrever o produto. Cada test
 - [ ] Ver data exata do fim do Free Plan (Billing → Free Tier)
 - [ ] MFA no root; criar usuário IAM `mia-dev` com access key (sem Identity Center, sem Organizations)
 - [ ] Alertas de Budget no consumo de créditos
-- [ ] Região us-east-1; testar Claude Haiku, Nova Lite e Llama no playground do Bedrock
-- [ ] Criar chave Gemini (AI Studio) e OpenAI (US$ 5, auto-reload desligado)
+- [ ] Região us-east-1; testar Claude Haiku, Nova Lite e Mistral Large 3 no playground do Bedrock
+- [ ] Criar chave Gemini (AI Studio) e Groq (grátis, sem cartão)
 
 **Testes**
 
 | Teste | Passa se | Se falhar |
 | --- | --- | --- |
-| Bedrock via LangChain (Claude, Nova, Llama) | 3 modelos respondem pelo mesmo `init_chat_model`; registro em JSONL | Cérebro só com Gemini/OpenAI; AWS só para deploy |
+| Bedrock via LangChain (Claude, Nova, Mistral Large 3) | 3 modelos respondem pelo mesmo `init_chat_model`; registro em JSONL | Cérebro só com Gemini/Groq; AWS só para deploy |
 | Gemini via LangChain | Mesmo script, só troca de config | Checar chave e limite no AI Studio |
 | AgentCore (exemplo echo oficial via WebSocket) | Deploy funciona e responde do navegador | Lambda + API Gateway para o modo texto; voz só local |
 | Nova 2 Sonic em português (exemplo oficial, local, com fone, ~15 min) | Português aceitável e latência confortável a partir de SP | Voz sai do escopo |

@@ -403,7 +403,7 @@ class RunRecord(BaseModel):
     session_id: str | None
     prompt_name: str
     prompt_version: int
-    provider: Literal["bedrock", "gemini", "openai", "groq"]
+    provider: Literal["bedrock", "gemini", "groq"]
     model: str
     params: dict
     input_hash: str
