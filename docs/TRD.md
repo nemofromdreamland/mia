@@ -167,7 +167,7 @@ Quatro conjuntos fixos rodam pelo Promptfoo, que chama o código Python real (cu
 | --- | --- | --- |
 | A. Juiz | 10 perguntas (6 técnicas, 4 comportamentais) × 7 respostas = 70: 5 níveis, 1 "enrolada", 1 paráfrase; nota humana; split dev 70% / teste 30% | Kappa ponderado, erro médio, % ±1, citações verificáveis, viés de verbosidade, consistência (3 execuções + paráfrases), JSON válido |
 | B. Ferramentas | ~40 momentos de conversa com a ferramenta e argumentos esperados | Acurácia de ferramenta e de argumentos |
-| C. Plano | Os 5 casos de `cases/` + uma vaga real com o CV do dono (mascarado, só local) | Schema válido, todo item com `purpose` e `look_for`, cobertura dos requisitos da vaga, perguntas mirando a lacuna proposital |
+| C. Plano | Os 5 casos de `cases/` + um par CV/vaga fictício extra, que não vira caso da web (nenhum dado real) | Schema válido, todo item com `purpose` e `look_for`, cobertura dos requisitos da vaga, perguntas mirando a lacuna proposital |
 | D. Robustez | Injections na resposta (e no CV/vaga, na CLI); respostas com dados pessoais; variações de formato | % de ataques que alteraram nota, resumo ou comportamento; vazamento de dados pessoais no resumo do recrutador; com e sem Bedrock Guardrails |
 
 **Regras do golden set**
@@ -175,7 +175,7 @@ Quatro conjuntos fixos rodam pelo Promptfoo, que chama o código Python real (cu
 - Respostas geradas por um modelo de outra família (ex.: Gemini gera, Claude julga), revisadas à mão.
 - O dono do projeto dá a nota antes de ver a nota do juiz.
 - Prompts são ajustados só no split dev; o número reportado vem do split teste.
-- Só dados sintéticos ou mascarados; nada real vai para planos gratuitos.
+- Só dados sintéticos ou fictícios; nada real vai para planos gratuitos nem para o git.
 
 **Divisão de trabalho:** Promptfoo roda os casos e a matriz prompt × modelo e faz o red-team; assertions em Python checam cada caso (schema, citações literais, ferramenta certa); `evals/metrics.py` lê o JSON exportado e calcula as métricas agregadas. O conjunto A roda no CI como teste de regressão.
 
@@ -226,7 +226,7 @@ Tudo em Terraform, região us-east-1, conta no Free Plan sem Organizations e sem
 
 Três camadas, da mais simples à mais completa; as duas primeiras existem desde o primeiro script.
 
-1. **JSONL em `runs/`**: cada chamada registra prompt, versão, modelo, tokens de entrada/saída, latência, custo estimado e se o JSON veio válido. É a fonte de verdade das métricas e sobrevive ao fechamento da conta.
+1. **JSONL em `runs/`**: cada chamada registra prompt, versão, modelo, tokens de entrada/saída, latência, custo estimado e se o JSON veio válido. É a fonte de verdade das métricas e sobrevive ao fechamento da conta. Rodadas com CV ou vaga reais (CLI) gravam em `local/runs/`, fora do git.
 2. **CloudWatch**: logs do runtime e da Lambda, métricas de erro e duração, retenção de 7 dias.
 3. **Langfuse** (fase de deploy): rastro por sessão com cada chamada de LLM e ferramenta, custo e latência por etapa.
 

@@ -67,7 +67,7 @@ O dono do projeto é júnior e precisa entender e defender cada linha numa entre
 
 - `src/mia/llm.py` é o ÚNICO lugar que chama modelos ou importa SDK de provedor (LangChain `init_chat_model`). Todo o resto chama `llm.py`.
 - Toda saída de LLM é validada por um schema de `src/mia/schemas.py` (Pydantic). Nada de dict solto.
-- Toda chamada a modelo grava um `RunRecord` em `runs/*.jsonl`.
+- Toda chamada a modelo grava um `RunRecord` em `runs/*.jsonl`. Exceção: rodadas com CV ou vaga reais (CLI) gravam em `local/runs/`. A pasta `local/` guarda todo dado real e fica fora do git, porque o repositório é público.
 - Prompts vivem em `prompts/<nome>/v<N>.yaml`. Prompt já usado em experimento nunca é editado: crie nova versão e registre no `changelog`.
 - `pii.py` mascara dados pessoais ANTES de qualquer chamada a LLM. Texto do usuário vai sempre entre delimitadores e é tratado como dado, nunca como instrução.
 - O LLM redige; o código decide: regras de estado, limites, citações literais e transições são determinísticas.

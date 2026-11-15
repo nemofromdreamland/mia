@@ -13,7 +13,7 @@ A versão web do MIA é uma demo pública sem login. O visitante escolhe um dos 
 - **Comparação justa:** todo mundo que faz o mesmo caso responde às mesmas perguntas, então "acima da média do caso" na tela do recrutador faz sentido.
 - **Custo previsível:** só a entrevista e a avaliação chamam modelos na web.
 
-O fluxo com o próprio CV continua existindo, mas só localmente (`mia simulate` na CLI) e nas avaliações.
+O fluxo com o próprio CV continua existindo, mas só localmente (`mia simulate` na CLI): o CV, a vaga e os registros dessas rodadas ficam em `local/`, fora do git. As avaliações usam só dados fictícios.
 
 ## Os 5 casos
 

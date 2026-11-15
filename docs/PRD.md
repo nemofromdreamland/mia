@@ -46,7 +46,7 @@ MIA (Mock Interview Assistant) é um simulador de entrevistas de emprego com IA.
 | --- | --- | --- | --- |
 | Visitante no papel de candidato | Abre a URL, sem login | Escolhe um dos 5 casos e faz a entrevista | Como se saiu em cada competência, com evidência, e o que melhorar |
 | Visitante no papel de recrutador | Abre a tela do recrutador, sem login | Vê quem ficou acima da média de cada caso | Quem vale a próxima etapa e por quê, com trechos das respostas |
-| Dono do projeto | CLI local | Simula com o próprio CV e a vaga real; roda as avaliações | Se está pronto para a entrevista real; números para o README |
+| Dono do projeto | CLI local | Simula localmente com o próprio CV e uma vaga real (tudo em `local/`, fora do git); roda as avaliações com dados fictícios | Se está pronto para a entrevista real; números para o README |
 
 Os 5 casos (detalhes em `CASES.md`) cobrem os três tipos de entrevista (RH, técnica, gestão) e três níveis (estágio, júnior, pleno). Cada visitante pode fazer até 5 simulações por dia.
 
