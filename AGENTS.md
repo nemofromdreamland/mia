@@ -1,6 +1,6 @@
 # MIA — Mock Interview Assistant
 
-Simulador de entrevistas com IA. Na web: demo pública sem login, o visitante escolhe 1 de 5 casos prontos → entrevista (texto, depois voz) → relatório com notas e evidências; uma tela do recrutador lista, por caso, quem ficou acima da média, com um resumo anônimo. Na CLI: CV + vaga próprios → triagem → plano → entrevista. Projeto de portfólio para vagas de Prompt Engineer / AI Engineer.
+Simulador de entrevistas com IA. Na web: demo pública sem login, o visitante escolhe 1 de 5 casos prontos → entrevista (texto, depois voz) → relatório com notas e evidências; uma tela do recrutador lista, por caso, quem ficou acima da média, com um resumo anônimo. Na CLI: CV + vaga avulsos (fictícios) → triagem → plano → entrevista. Projeto de portfólio para vagas de Prompt Engineer / AI Engineer.
 
 Este arquivo vale para qualquer agente de código usado no projeto (Claude Code e Codex). Não crie um `CLAUDE.md`: se ele existir, o Claude Code passa a ignorar este arquivo.
 
@@ -67,13 +67,14 @@ O dono do projeto é júnior e precisa entender e defender cada linha numa entre
 
 - `src/mia/llm.py` é o ÚNICO lugar que chama modelos ou importa SDK de provedor (LangChain `init_chat_model`). Todo o resto chama `llm.py`.
 - Toda saída de LLM é validada por um schema de `src/mia/schemas.py` (Pydantic). Nada de dict solto.
-- Toda chamada a modelo grava um `RunRecord` em `runs/*.jsonl`. Exceção: rodadas com CV ou vaga reais (CLI) gravam em `local/runs/`. A pasta `local/` guarda todo dado real e fica fora do git, porque o repositório é público.
+- Toda chamada a modelo grava um `RunRecord` em `runs/*.jsonl`.
 - Prompts vivem em `prompts/<nome>/v<N>.yaml`. Prompt já usado em experimento nunca é editado: crie nova versão e registre no `changelog`.
 - `pii.py` mascara dados pessoais ANTES de qualquer chamada a LLM. Texto do usuário vai sempre entre delimitadores e é tratado como dado, nunca como instrução.
 - O LLM redige; o código decide: regras de estado, limites, citações literais e transições são determinísticas.
 - Não existe login. `visitor_id` vem sempre do header `X-Visitor-Id` validado (UUID v4), nunca do corpo; toda operação de sessão filtra por ele.
 - `create_session` sempre passa por `quotas.py` (5/visitante/dia, 100/dia global) e pelo kill switch `config/demo.open` antes de criar qualquer coisa.
 - Na web, triagem e plano vêm dos fixtures em `cases/`; nada de upload de CV pela API. Fixture mudou → `version` sobe.
+- Só CVs e vagas fictícios no projeto inteiro (web, CLI e avaliações); nenhum dado real, porque o repositório é público.
 - Telas e respostas do recrutador nunca expõem `visitor_id` nem dado pessoal; o `CandidateSummary` é apoio à decisão, não decisão.
 - Repositórios de dados têm interface + implementação em memória + implementação DynamoDB.
 

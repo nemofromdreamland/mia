@@ -20,6 +20,3 @@ frontend/dist/
 *.key
 crash.log
 .claude/settings.local.json
-
-# real personal data (own CV, real job posts, their runs): never committed
-local/

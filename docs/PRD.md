@@ -46,7 +46,7 @@ MIA (Mock Interview Assistant) é um simulador de entrevistas de emprego com IA.
 | --- | --- | --- | --- |
 | Visitante no papel de candidato | Abre a URL, sem login | Escolhe um dos 5 casos e faz a entrevista | Como se saiu em cada competência, com evidência, e o que melhorar |
 | Visitante no papel de recrutador | Abre a tela do recrutador, sem login | Vê quem ficou acima da média de cada caso | Quem vale a próxima etapa e por quê, com trechos das respostas |
-| Dono do projeto | CLI local | Simula localmente com o próprio CV e uma vaga real (tudo em `local/`, fora do git); roda as avaliações com dados fictícios | Se está pronto para a entrevista real; números para o README |
+| Dono do projeto | CLI local | Simula com CVs e vagas fictícios; roda as avaliações | Se o simulador funciona bem; números para o README |
 
 Os 5 casos (detalhes em `CASES.md`) cobrem os três tipos de entrevista (RH, técnica, gestão) e três níveis (estágio, júnior, pleno). Cada visitante pode fazer até 5 simulações por dia.
 
@@ -85,7 +85,7 @@ O MVP é o modo texto completo com os casos e a tela do recrutador; a voz é uma
 | MVP: recrutador | Lista por caso acima da média, detalhe com resumo e transcrição | Obrigatório |
 | MVP: controle da demo | Visitante anônimo, cotas diárias, interruptor, throttling | Obrigatório |
 | Avaliação | Conjuntos A–D, tabelas v1 × v2, comparação entre modelos | Obrigatório |
-| CLI local | Simulação com CV e vaga próprios, geração das fixtures dos casos | Obrigatório |
+| CLI local | Simulação com CV e vaga avulsos (fictícios), geração das fixtures dos casos | Obrigatório |
 | Voz | Nova 2 Sonic usando as mesmas ferramentas do modo texto | Só se o Sonic em português passar na fase 0 e houver tempo antes de terça |
 | Inglês | Casos e entrevista em inglês (idioma já é parâmetro) | Depois do MVP |
 | Versão permanente | Modo texto no Hugging Face Spaces com Gemini | Depois de terça |
@@ -111,7 +111,7 @@ O MVP é o modo texto completo com os casos e a tela do recrutador; a voz é uma
 | RF-13 | Detalhe do candidato: resumo, forças e pontos de atenção com trechos, notas, sugestão de próximo passo, transcrição | MVP |
 | RF-14 | Limitar sessões por dia (5 por visitante, 100 no total) e permitir pausar a demo | MVP |
 | RF-15 | Avisar o visitante, antes de começar, que as respostas ficam anônimas e podem aparecer para o recrutador; permitir apagar a própria sessão | MVP |
-| RF-16 | CLI local: simular com CV e vaga próprios e gerar as fixtures dos casos | MVP |
+| RF-16 | CLI local: simular com CV e vaga avulsos (fictícios) e gerar as fixtures dos casos | MVP |
 | RF-17 | Conduzir a mesma entrevista por voz em tempo real, com interrupção | Voz |
 | RF-18 | Casos e entrevista em inglês | Depois do MVP |
 

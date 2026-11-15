@@ -47,7 +47,7 @@ O navegador chama o API Gateway, que aplica throttling e repassa a uma Lambda pr
 
 **Dois fluxos**
 
-- **Offline (CLI):** `scripts/build_cases.py` roda o grafo de preparação (triagem → plano) nos 5 casos e grava as fixtures, que são revisadas e versionadas. O mesmo grafo atende `mia simulate` com CV próprio.
+- **Offline (CLI):** `scripts/build_cases.py` roda o grafo de preparação (triagem → plano) nos 5 casos e grava as fixtures, que são revisadas e versionadas. O mesmo grafo atende `mia simulate` com CV e vaga avulsos (fictícios).
 - **Assíncrono (sem pressa):** fim da sessão → relatório → resumo do candidato para o recrutador. Usa modelos maiores quando vale a pena.
 - **Tempo real (conversa):** cada resposta passa pela máquina de estados do entrevistador, que chama as ferramentas (aprofundar, próxima pergunta, nota em segundo plano). Na voz, o Nova 2 Sonic fala e ouve, mas chama essas mesmas ferramentas.
 
@@ -226,7 +226,7 @@ Tudo em Terraform, região us-east-1, conta no Free Plan sem Organizations e sem
 
 Três camadas, da mais simples à mais completa; as duas primeiras existem desde o primeiro script.
 
-1. **JSONL em `runs/`**: cada chamada registra prompt, versão, modelo, tokens de entrada/saída, latência, custo estimado e se o JSON veio válido. É a fonte de verdade das métricas e sobrevive ao fechamento da conta. Rodadas com CV ou vaga reais (CLI) gravam em `local/runs/`, fora do git.
+1. **JSONL em `runs/`**: cada chamada registra prompt, versão, modelo, tokens de entrada/saída, latência, custo estimado e se o JSON veio válido. É a fonte de verdade das métricas e sobrevive ao fechamento da conta.
 2. **CloudWatch**: logs do runtime e da Lambda, métricas de erro e duração, retenção de 7 dias.
 3. **Langfuse** (fase de deploy): rastro por sessão com cada chamada de LLM e ferramenta, custo e latência por etapa.
 

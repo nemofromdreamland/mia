@@ -21,14 +21,14 @@ A web é uma demo pública sem login: o visitante é identificado por um id anô
 
 **Convenções:** ids de sessão são ULID (ordenam por data); `visitor_id` é UUID v4 gerado no navegador; datas em ISO 8601 UTC; campos em inglês e `snake_case`; todo texto digitado pelo visitante é mascarado (`pii.py`) antes de ser salvo ou enviado a um modelo.
 
-**Fluxo local (CLI):** `mia simulate --cv --job` continua aceitando CV e vaga próprios. Nesse caminho a sessão passa por `preparing` e usa `visitor_id = "local"`. A web não expõe esse fluxo.
+**Fluxo local (CLI):** `mia simulate --cv --job` continua aceitando CV e vaga avulsos (fictícios). Nesse caminho a sessão passa por `preparing` e usa `visitor_id = "local"`. A web não expõe esse fluxo.
 
 ## Ciclo de vida da sessão
 
 ```mermaid
 stateDiagram-v2
     [*] --> ready: create_session com case_id (web)
-    [*] --> preparing: CLI com CV próprio
+    [*] --> preparing: CLI com CV avulso
     preparing --> ready: plano gerado e validado
     preparing --> failed: erro no CV ou saída inválida
     failed --> preparing: tentar de novo (CLI)
@@ -44,7 +44,7 @@ Toda mudança de estado é um `UpdateItem` condicionado ao estado anterior. Uma 
 | Transição | Gatilho |
 | --- | --- |
 | → `ready` | `create_session` com `case_id`: copia triagem e plano das fixtures |
-| → `preparing` | Só na CLI, com CV e vaga próprios |
+| → `preparing` | Só na CLI, com CV e vaga avulsos (fictícios) |
 | `preparing` → `ready` / `failed` | Plano gerado e validado / erro (CLI) |
 | `ready` → `in_progress` | `start_interview` |
 | `in_progress` → `scoring` | `end_interview`, plano concluído ou limite atingido |
