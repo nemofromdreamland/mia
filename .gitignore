@@ -10,3 +10,13 @@ frontend/dist/
 *.tfstate
 *.tfstate.backup
 .DS_Store
+
+# secrets and local-only config (public repo)
+.env.*
+!.env.example
+*.tfvars
+*.tfvars.json
+*.pem
+*.key
+crash.log
+.claude/settings.local.json
