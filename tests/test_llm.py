@@ -181,6 +181,24 @@ def test_real_models_config_uses_haiku_geo_pricing() -> None:
     assert estimate_cost(spec, 0, 1_000_000) == pytest.approx(5.50)
 
 
+@pytest.mark.parametrize(
+    ("ref", "usd_in", "usd_out"),
+    [
+        # Bare Nova id has no on-demand access in us-east-1; "us." profile = in-region price.
+        ("bedrock:us.amazon.nova-2-lite-v1:0", 0.33, 2.75),
+        # gemini-2.5-flash is gone for new users; 3.8 Flash promotional rate until 2026-12-31.
+        ("gemini:gemini-3.8-flash", 0.75, 3.75),
+    ],
+)
+def test_real_models_config_uses_ids_and_prices_confirmed_in_smoke_test(
+    ref: str, usd_in: float, usd_out: float
+) -> None:
+    spec = load_models_config().models[ref]
+
+    assert estimate_cost(spec, 1_000_000, 0) == pytest.approx(usd_in)
+    assert estimate_cost(spec, 0, 1_000_000) == pytest.approx(usd_out)
+
+
 # --- max_retries (0.6 R1) ----------------------------------------------------
 
 
