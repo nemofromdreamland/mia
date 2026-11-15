@@ -410,8 +410,8 @@ class RunRecord(BaseModel):
     input: dict                      # variáveis mascaradas
     output_raw: str
     output_parsed: dict | None
-    json_valid_first_try: bool
-    repaired: bool
+    json_valid_first_try: bool | None  # None = não se aplica (saída em texto)
+    repaired: bool | None              # None = não se aplica (saída em texto)
     input_tokens: int
     output_tokens: int
     latency_ms: int
@@ -419,6 +419,8 @@ class RunRecord(BaseModel):
     error: str | None
     created_at: datetime
 ```
+
+`json_valid_first_try` e `repaired` só têm sentido em chamadas com `output_schema`. Em saída de texto livre (entrevistador, smoke test) ficam `None`: gravar `false` contaria como "JSON inválido" e derrubaria a taxa de JSON válido sem motivo. As métricas contam só os registros em que os campos não são `None`. (Decidido na spec 0.5.)
 
 **Prompt** · `prompts/<nome>/v<N>.yaml`, validado ao carregar
 
