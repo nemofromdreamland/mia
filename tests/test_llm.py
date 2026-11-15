@@ -593,16 +593,28 @@ def test_invoke_retry_latency_includes_the_waits(
     [("gemini:test-flash", 3), ("groq:openai/test-oss", 5)],  # max_retries 2 and 4
 )
 def test_invoke_gives_up_after_max_retries_and_records_last_error(
-    cfg: ModelsConfig, tmp_path: Path, ref: str, expected_calls: int
+    cfg: ModelsConfig,
+    tmp_path: Path,
+    ref: str,
+    expected_calls: int,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    model = _FlakyChatModel(messages=iter([]), failures=99)
+    errors: list[RuntimeError] = []
 
-    with pytest.raises(RuntimeError, match="boom"):
-        _invoke(cfg, tmp_path, model, model=ref)
+    def fail(*args: Any, **kwargs: Any) -> Any:
+        error = RuntimeError(f"attempt {len(errors) + 1}")
+        errors.append(error)
+        raise error
 
-    assert model.calls == expected_calls
+    monkeypatch.setattr(GenericFakeChatModel, "_generate", fail)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        _invoke(cfg, tmp_path, _fake_model(), model=ref)
+
+    assert len(errors) == expected_calls
+    assert exc_info.value is errors[-1]
     (record,) = _read_records(_today_file(tmp_path, "test"))
-    assert record.error == "RuntimeError: boom"
+    assert record.error == f"RuntimeError: attempt {expected_calls}"
 
 
 def test_invoke_without_retries_calls_model_once(cfg: ModelsConfig, tmp_path: Path) -> None:

@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 from typing import Any
+from urllib.parse import quote
 
 import pytest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
@@ -92,7 +93,7 @@ def _use_fakes(
 
 
 def test_run_smoke_records_one_line_per_model_in_order(cfg: ModelsConfig, tmp_path: Path) -> None:
-    results, path = smoke.run_smoke(
+    results, (path,) = smoke.run_smoke(
         [REF_A, REF_B],
         config=cfg,
         runs_dir=tmp_path,
@@ -115,7 +116,7 @@ def test_run_smoke_records_one_line_per_model_in_order(cfg: ModelsConfig, tmp_pa
 
 
 def test_run_smoke_keeps_going_after_a_failure(cfg: ModelsConfig, tmp_path: Path) -> None:
-    results, path = smoke.run_smoke(
+    results, (path,) = smoke.run_smoke(
         [REF_A, REF_B],
         config=cfg,
         runs_dir=tmp_path,
@@ -138,7 +139,7 @@ def test_run_smoke_reports_errors_raised_before_any_record(
 
     monkeypatch.setattr(llm, "init_chat_model", broken_init)
 
-    results, path = smoke.run_smoke(
+    results, (path,) = smoke.run_smoke(
         [REF_A, REF_B], config=cfg, runs_dir=tmp_path, chat_models={REF_B: _ok("ok")}
     )
 
@@ -157,7 +158,7 @@ def test_format_table_has_one_row_per_model_with_short_single_line_preview() -> 
     long_error = "RuntimeError: " + "erro\n" * 50
     results = [
         smoke.SmokeResult(REF_A, True, 20, 10, 812, 0.0000123, "olá"),
-        smoke.SmokeResult(REF_B, False, 0, 0, 15, 0.0, smoke.make_preview(long_error)),
+        smoke.SmokeResult(REF_B, False, 0, 0, 15, 0.0, long_error),
     ]
 
     lines = smoke.format_table(results).splitlines()
@@ -166,8 +167,9 @@ def test_format_table_has_one_row_per_model_with_short_single_line_preview() -> 
     row_b = next(line for line in lines if REF_B in line)
     assert all(part in row_a for part in ("ok", "20", "10", "812", "0.000012", "olá"))
     assert "erro" in row_b
-    assert len(smoke.make_preview(long_error)) <= 60
-    assert "\n" not in smoke.make_preview(long_error)
+    assert len(lines) == 3
+    assert row_b.endswith(" ".join(long_error.split())[:60])
+    assert len(row_b[row_b.index("RuntimeError:") :]) == 60
 
 
 # --- main (R5-R8) ------------------------------------------------------------
@@ -229,3 +231,76 @@ def test_main_prints_table_and_jsonl_path_without_secrets(
     assert "resposta do groq" in captured.out
     assert "smoke-providers.jsonl" in captured.out
     assert "segredo-teste" not in captured.out + captured.err
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_main_reports_each_record_and_path_across_utc_midnight(
+    cfg: ModelsConfig,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    fails: bool,
+) -> None:
+    class Clock:
+        ticks = iter(
+            [
+                datetime(2026, 11, 15, 23, 59, 59, tzinfo=UTC),
+                datetime(2026, 11, 16, 0, 0, 1, tzinfo=UTC),
+            ]
+        )
+
+        @staticmethod
+        def now(tz: Any) -> datetime:
+            return next(Clock.ticks)
+
+    monkeypatch.setattr(llm, "datetime", Clock)
+    _use_fakes(
+        monkeypatch,
+        cfg,
+        tmp_path,
+        {REF_A: _ok("answer A"), REF_B: _failing() if fails else _ok("answer B", 30, 5)},
+    )
+    assert smoke.main(["--model", REF_A, "--model", REF_B]) == int(fails)
+    output = capsys.readouterr().out
+    row = next(line for line in output.splitlines() if REF_B in line)
+    assert ("provider down" if fails else "answer B") in row
+    assert "answer A" not in row
+    for day in ("2026-11-15", "2026-11-16"):
+        path = tmp_path / f"{day}_smoke-providers.jsonl"
+        assert str(path) in output
+        assert len(_records(path)) == 1
+
+
+@pytest.mark.parametrize("during_call", [False, True])
+@pytest.mark.parametrize("encoded", [False, True])
+@pytest.mark.parametrize("variable", ["GOOGLE_API_KEY", "GROQ_API_KEY", "AWS_SESSION_TOKEN"])
+def test_main_redacts_credentials_in_errors_and_records(
+    cfg: ModelsConfig,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    during_call: bool,
+    encoded: bool,
+    variable: str,
+) -> None:
+    secret = "fictional+credential/value="
+    exposed = quote(secret, safe="") if encoded else secret
+    monkeypatch.setenv(variable, secret)
+    error = RuntimeError(f"invalid key: {exposed}")
+
+    def fail(*args: Any, **kwargs: Any) -> Any:
+        raise error
+
+    monkeypatch.setattr(llm, "init_chat_model", fail)
+    monkeypatch.setattr(GenericFakeChatModel, "_generate", fail)
+    _use_fakes(monkeypatch, cfg, tmp_path, {REF_B: _ok("unused")} if during_call else {})
+    assert smoke.main(["--model", REF_B]) == 1
+    captured = capsys.readouterr()
+    files = list(tmp_path.glob("*.jsonl"))
+    persisted = "".join(path.read_text("utf-8") for path in files)
+    assert secret not in captured.out + captured.err + persisted
+    assert exposed not in captured.out + captured.err + persisted
+    assert "invalid key: [REDACTED]" in captured.out
+    assert bool(files) == during_call
+    if not during_call:
+        assert "Nenhum registro gravado." in captured.out

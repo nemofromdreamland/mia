@@ -6,11 +6,14 @@ Chooses provider/model from config/models.yaml, builds the chat model with LangC
 
 import hashlib
 import json
+import os
 import time
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast, get_args
+from urllib.parse import quote, quote_plus
 
 import yaml
 from langchain.chat_models import init_chat_model
@@ -22,6 +25,17 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 from mia.schemas import RunRecord
 
 Provider = Literal["bedrock", "gemini", "groq"]
+RecordObserver = Callable[[RunRecord, Path], None]
+
+CREDENTIAL_ENV_NAMES = (
+    "GOOGLE_API_KEY",
+    "GEMINI_API_KEY",
+    "GROQ_API_KEY",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "AWS_BEARER_TOKEN_BEDROCK",
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODELS_PATH = REPO_ROOT / "config" / "models.yaml"
@@ -144,13 +158,30 @@ def hash_input(system: str, user: str) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def append_run_record(record: RunRecord, runs_dir: Path = DEFAULT_RUNS_DIR) -> Path:
+def redact_secrets(text: str) -> str:
+    """Mask provider credentials from the process environment, never reading .env."""
+    secrets = {value for name in CREDENTIAL_ENV_NAMES if (value := os.environ.get(name))}
+    variants = {
+        form for value in secrets for form in (value, quote(value, safe=""), quote_plus(value))
+    }
+    for value in sorted(variants, key=len, reverse=True):
+        text = text.replace(value, "[REDACTED]")
+    return text
+
+
+def append_run_record(
+    record: RunRecord,
+    runs_dir: Path = DEFAULT_RUNS_DIR,
+    on_record: RecordObserver | None = None,
+) -> Path:
     """Append one JSON line to runs/<UTC date>_<experiment>.jsonl and return the file path."""
     runs_dir.mkdir(parents=True, exist_ok=True)
     name = f"{record.created_at.date().isoformat()}_{record.experiment or NO_EXPERIMENT}.jsonl"
     path = runs_dir / name
     with path.open("a", encoding="utf-8") as file:
         file.write(record.model_dump_json() + "\n")
+    if on_record is not None:
+        on_record(record, path)
     return path
 
 
@@ -172,11 +203,13 @@ def invoke(
     config: ModelsConfig | None = None,
     runs_dir: Path = DEFAULT_RUNS_DIR,
     chat_model: BaseChatModel | None = None,
+    on_record: RecordObserver | None = None,
 ) -> str:
     """Call the model with already-rendered messages, record a RunRecord, return the text.
 
     ``input`` holds the (already masked) variables, saved as-is in the record.
     ``chat_model`` lets tests inject a fake model; by default it is built from the config.
+    ``on_record`` receives the exact record and path after persistence (success or failure).
     """
     spec = resolve_model(model, config or load_models_config())
     params = dict(params or {})
@@ -217,9 +250,9 @@ def invoke(
             output_tokens=0,
             latency_ms=_elapsed_ms(started),
             cost_usd=0.0,
-            error=f"{type(exc).__name__}: {exc}",
+            error=redact_secrets(f"{type(exc).__name__}: {exc}"),
         )
-        append_run_record(failed, runs_dir)
+        append_run_record(failed, runs_dir, on_record)
         raise
 
     latency_ms = _elapsed_ms(started)
@@ -237,5 +270,6 @@ def invoke(
             error=None,
         ),
         runs_dir,
+        on_record,
     )
     return response.text

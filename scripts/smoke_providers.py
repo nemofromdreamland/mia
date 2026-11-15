@@ -12,11 +12,10 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from mia.llm import DEFAULT_RUNS_DIR, ModelsConfig, invoke, load_models_config
+from mia.llm import DEFAULT_RUNS_DIR, ModelsConfig, invoke, load_models_config, redact_secrets
 from mia.schemas import RunRecord
 
 if TYPE_CHECKING:
@@ -45,20 +44,7 @@ class SmokeResult:
 
 def make_preview(text: str) -> str:
     """Collapse whitespace (including newlines) and cut to PREVIEW_CHARS."""
-    return " ".join(text.split())[:PREVIEW_CHARS]
-
-
-def runs_file(runs_dir: Path) -> Path:
-    """Today's (UTC) file for this experiment, the same name llm.append_run_record uses."""
-    return runs_dir / f"{datetime.now(UTC).date().isoformat()}_{SMOKE_EXPERIMENT}.jsonl"
-
-
-def _count_lines(path: Path) -> int:
-    return len(path.read_text("utf-8").splitlines()) if path.exists() else 0
-
-
-def _last_record(path: Path) -> RunRecord:
-    return RunRecord.model_validate_json(path.read_text("utf-8").splitlines()[-1])
+    return " ".join(redact_secrets(text).split())[:PREVIEW_CHARS]
 
 
 def _result_from_record(ref: str, record: RunRecord) -> SmokeResult:
@@ -79,12 +65,12 @@ def run_smoke(
     config: ModelsConfig,
     runs_dir: Path = DEFAULT_RUNS_DIR,
     chat_models: dict[str, BaseChatModel] | None = None,
-) -> tuple[list[SmokeResult], Path]:
+) -> tuple[list[SmokeResult], list[Path]]:
     """Call each model once, in order; a failure never stops the next models."""
-    path = runs_file(runs_dir)
+    paths: list[Path] = []
     results: list[SmokeResult] = []
     for ref in refs:
-        lines_before = _count_lines(path)
+        recorded: list[tuple[RunRecord, Path]] = []
         try:
             invoke(
                 prompt_name=SMOKE_PROMPT_NAME,
@@ -98,15 +84,19 @@ def run_smoke(
                 config=config,
                 runs_dir=runs_dir,
                 chat_model=(chat_models or {}).get(ref),
+                on_record=lambda record, path, sink=recorded: sink.append((record, path)),
             )
         except Exception as exc:
-            if _count_lines(path) == lines_before:
+            if not recorded:
                 # Failed before calling the provider (e.g. missing package): no RunRecord.
                 preview = make_preview(f"{type(exc).__name__}: {exc}")
                 results.append(SmokeResult(ref, False, 0, 0, 0, 0.0, preview))
                 continue
-        results.append(_result_from_record(ref, _last_record(path)))
-    return results, path
+        record, path = recorded[0]
+        results.append(_result_from_record(ref, record))
+        if path not in paths:
+            paths.append(path)
+    return results, paths
 
 
 def format_table(results: list[SmokeResult]) -> str:
@@ -119,7 +109,7 @@ def format_table(results: list[SmokeResult]) -> str:
             str(r.output_tokens),
             str(r.latency_ms),
             f"{r.cost_usd:.6f}",
-            r.preview,
+            make_preview(r.preview),
         )
         for r in results
     ]
@@ -152,9 +142,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Modelo fora do config/models.yaml: {', '.join(unknown)}", file=sys.stderr)
         return 2
 
-    results, path = run_smoke(refs, config=config)
+    results, paths = run_smoke(refs, config=config)
     print(format_table(results))
-    print(f"\nRegistros em: {path}")
+    if paths:
+        print("\nRegistros em: " + "\n".join(str(path) for path in paths))
+    else:
+        print("\nNenhum registro gravado.")
     return 0 if all(r.ok for r in results) else 1
 
 
