@@ -4,7 +4,8 @@ from typing import Any
 
 import pytest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.outputs import ChatResult
 
 import mia.llm as llm
 from mia.llm import (
@@ -79,6 +80,39 @@ def test_load_models_config_rejects_missing_price(tmp_path: Path) -> None:
         load_models_config(path)
 
 
+@pytest.mark.parametrize(
+    ("fields", "field"),
+    [
+        ("model: x, usd_per_mtok_input: 0.1", "model"),
+        ("provider: gemini, usd_per_mtok_input: -1, usd_per_mtok_output: 0.4", "provider"),
+        ("ref: 'gemini:x', usd_per_mtok_input: 0.1, usd_per_mtok_output: 0.4", "ref"),
+    ],
+)
+def test_load_models_config_rejects_derived_fields(tmp_path: Path, fields: str, field: str) -> None:
+    path = _write_config(tmp_path, f'default: "gemini:x"\nmodels:\n  "gemini:x": {{{fields}}}\n')
+
+    with pytest.raises(ModelConfigError) as exc_info:
+        load_models_config(path)
+
+    assert str(path) in str(exc_info.value)
+    assert f"models.gemini:x.{field}" in str(exc_info.value)
+
+
+@pytest.mark.parametrize("default", ['["gemini:x"]', '{model: "gemini:x"}', "123", "null"])
+def test_load_models_config_rejects_non_string_default(tmp_path: Path, default: str) -> None:
+    path = _write_config(
+        tmp_path,
+        f"default: {default}\nmodels:\n"
+        '  "gemini:x": {usd_per_mtok_input: 0.1, usd_per_mtok_output: 0.4}\n',
+    )
+
+    with pytest.raises(ModelConfigError) as exc_info:
+        load_models_config(path)
+
+    assert str(path) in str(exc_info.value)
+    assert "default" in str(exc_info.value)
+
+
 def test_load_models_config_rejects_unknown_provider(tmp_path: Path) -> None:
     path = _write_config(
         tmp_path,
@@ -130,6 +164,14 @@ def test_real_models_config_loads_with_free_tier_on_gemini_and_groq() -> None:
     paid = {spec.provider for spec in real.models.values() if not spec.free_tier}
     assert free == {"gemini", "groq"}
     assert paid == {"bedrock"}
+
+
+def test_real_models_config_uses_haiku_geo_pricing() -> None:
+    # Anthropic list prices effective 2026-11-09: Geo Cross Region, not Global.
+    spec = load_models_config().models["bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"]
+
+    assert estimate_cost(spec, 1_000_000, 0) == pytest.approx(1.10)
+    assert estimate_cost(spec, 0, 1_000_000) == pytest.approx(5.50)
 
 
 # --- resolve_model (R3) ------------------------------------------------------
@@ -301,6 +343,47 @@ def test_invoke_same_input_same_hash_new_run_id_each_call(
     assert first.input_hash == second.input_hash
     assert first.run_id != second.run_id
     assert third.input_hash != first.input_hash
+
+
+def test_invoke_sends_exact_messages_in_role_order(
+    cfg: ModelsConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[list[BaseMessage]] = []
+    original_generate = GenericFakeChatModel._generate
+
+    def capture(
+        self: GenericFakeChatModel, messages: list[BaseMessage], **kwargs: Any
+    ) -> ChatResult:
+        calls.append(messages)
+        return original_generate(self, messages, **kwargs)
+
+    monkeypatch.setattr(GenericFakeChatModel, "_generate", capture)
+    _invoke(cfg, tmp_path, _fake_model("ok"), system="system instructions", user="user data")
+
+    assert calls == [[SystemMessage("system instructions"), HumanMessage("user data")]]
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_invoke_records_measured_latency(
+    cfg: ModelsConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fails: bool
+) -> None:
+    # Replace only mia.llm's clock, so LangChain's own timing does not consume our ticks.
+    class Clock:
+        ticks = iter([10.0, 10.125])
+
+        @staticmethod
+        def perf_counter() -> float:
+            return next(Clock.ticks)
+
+    monkeypatch.setattr(llm, "time", Clock)
+    if fails:
+        with pytest.raises(RuntimeError, match="boom"):
+            _invoke(cfg, tmp_path, _FailingChatModel(messages=iter([])))
+    else:
+        _invoke(cfg, tmp_path, _fake_model("ok"))
+
+    (record,) = _read_records(_today_file(tmp_path, "test"))
+    assert record.latency_ms == 125
 
 
 def test_hash_input_does_not_confuse_system_and_user_boundaries() -> None:

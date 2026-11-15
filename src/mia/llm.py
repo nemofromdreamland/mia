@@ -80,6 +80,11 @@ def _parse_model(ref: Any, fields: Any, path: Path) -> ModelSpec:
     where = f"{path}: models.{ref}"
     if not isinstance(fields, dict):
         raise ModelConfigError(f"{where}: entry must be a mapping of fields")
+    for field in ("ref", "provider", "model"):
+        if field in fields:
+            raise ModelConfigError(
+                f"{where}.{field}: derived from the catalog key; omit this field"
+            )
     provider, model = _split_ref(str(ref), str(path))
     try:
         return ModelSpec(ref=str(ref), provider=provider, model=model, **fields)
@@ -99,6 +104,8 @@ def load_models_config(path: Path = DEFAULT_MODELS_PATH) -> ModelsConfig:
 
     models = {str(ref): _parse_model(ref, fields, path) for ref, fields in raw["models"].items()}
     default = raw.get("default")
+    if not isinstance(default, str):
+        raise ModelConfigError(f"{path}: default must be a 'provider:model' string")
     if default not in models:
         raise ModelConfigError(f"{path}: default {default!r} is not one of the models")
     return ModelsConfig(default=default, models=models)

@@ -8,7 +8,8 @@
 #   gemini  https://ai.google.dev/gemini-api/docs/pricing
 #   groq    https://console.groq.com/docs/model/openai/gpt-oss-120b
 #   bedrock https://aws.amazon.com/bedrock/pricing/ (Mistral Large 3)
-#           https://docs.anthropic.com/en/docs/about-claude/pricing (Claude Haiku 4.5; same rate on Bedrock)
+#           https://assets.claude.com/a04aca860a54b7323e33f449706e9b43680e1346.pdf
+#           (2026-11-09 list prices, page 9: Haiku 4.5, Standard / In-Region & Geo Cross Region)
 #           https://aws.amazon.com/blogs/machine-learning/pair-nova-2-lite-with-claude-for-cost-optimized-document-processing/ (Nova 2 Lite)
 # Model IDs are confirmed against real calls in task 0.6.
 
@@ -25,10 +26,10 @@ models:
     usd_per_mtok_output: 0.60
     free_tier: true
 
-  # Claude 4.5+ on Bedrock is invoked through the US cross-region inference profile ("us." prefix).
+  # US cross-region inference profile ("us." prefix): 10% premium over the global rate.
   "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0":
-    usd_per_mtok_input: 1.00
-    usd_per_mtok_output: 5.00
+    usd_per_mtok_input: 1.10
+    usd_per_mtok_output: 5.50
 
   "bedrock:amazon.nova-2-lite-v1:0":
     usd_per_mtok_input: 0.30
