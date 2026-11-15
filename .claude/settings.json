@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(uv sync)",
+      "Bash(uv add *)",
+      "Bash(uv run pytest)",
+      "Bash(uv run pytest *)",
+      "Bash(uv run ruff *)",
+      "Bash(uv run mia *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(npm install)",
+      "Bash(npm run *)",
+      "Bash(npx promptfoo *)",
+      "Bash(terraform fmt *)",
+      "Bash(terraform -chdir=infra fmt *)",
+      "Bash(terraform -chdir=infra validate)",
+      "Bash(terraform -chdir=infra plan *)",
+      "Bash(terraform -chdir=infra plan)"
+    ],
+    "ask": [
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(terraform -chdir=infra apply *)",
+      "Bash(terraform -chdir=infra apply)",
+      "Bash(terraform -chdir=infra destroy *)",
+      "Bash(terraform apply *)",
+      "Bash(terraform destroy *)",
+      "Bash(aws *)",
+      "Bash(docker push *)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Bash(terraform -chdir=infra apply -auto-approve *)",
+      "Bash(terraform apply -auto-approve *)",
+      "Bash(rm -rf *)"
+    ]
+  }
+}
