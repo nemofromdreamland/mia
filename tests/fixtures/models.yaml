@@ -1,0 +1,14 @@
+# Small, stable catalog for tests only (prices are made up and never change).
+default: "gemini:test-flash"
+models:
+  "gemini:test-flash":
+    usd_per_mtok_input: 0.10
+    usd_per_mtok_output: 0.40
+    free_tier: true
+  "bedrock:anthropic.claude-x-v1:0":
+    usd_per_mtok_input: 1.00
+    usd_per_mtok_output: 5.00
+  "groq:openai/test-oss":
+    usd_per_mtok_input: 0.15
+    usd_per_mtok_output: 0.60
+    free_tier: true
