@@ -1,6 +1,6 @@
 ---
 name: spec
-description: Escreve a spec de uma tarefa do Implementation Plan (ex. spec 1.4), já quebrada em passos pequenos. Use só quando o usuário pedir explicitamente. Não escreve código de produção.
+description: Escreve a spec de uma tarefa do Implementation Plan (ex. spec 1.4), já quebrada em passos do tamanho da tarefa (P, M ou G). Use só quando o usuário pedir explicitamente. Não escreve código de produção.
 argument-hint: "[id-da-tarefa]"
 disable-model-invocation: true
 allowed-tools: Read Grep Glob Write
@@ -15,7 +15,7 @@ Escreva a spec da tarefa indicada pelo usuário (id da tarefa: $ARGUMENTS) do `d
    - Requisitos no formato "QUANDO <condição>, O SISTEMA DEVE <comportamento>", cada um testável.
    - Design com arquivos, funções e assinaturas tipadas; reutilize os tipos de `schemas.py`.
    - Plano de testes com casos concretos (entrada → saída esperada), incluindo casos de erro.
-   - **Passos:** quebre a tarefa em 3 a 8 passos pequenos, na ordem em que serão feitos. Cada passo: um comportamento testável, até ~3 arquivos, até ~150 linhas de diff, termina com os testes passando, e diz como o usuário testa sozinho. Siga a seção "Ritmo de trabalho" do `AGENTS.md`.
+   - **Tamanho e passos:** estime o tamanho da tarefa (P, M ou G, campo `tamanho`) e quebre-a no número de passos da tabela da seção "Ritmo de trabalho" do `AGENTS.md`, na ordem em que serão feitos. Cada passo: uma entrega coerente e testável, dentro do limite de arquivos e linhas do tamanho, termina com os testes passando, e diz como o usuário testa sozinho.
    - Critérios de aceite: copie o "Pronto quando" do plano e detalhe como verificar cada um (comando).
    - Fora de escopo: o que NÃO será feito nesta tarefa.
    - Perguntas em aberto: tudo que os documentos não respondem. Não invente.

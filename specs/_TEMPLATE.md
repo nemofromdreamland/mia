@@ -3,6 +3,7 @@ id: X.Y
 titulo: <título curto>
 status: rascunho   # rascunho → aprovada → implementada → concluída
 depende_de: []     # ex.: [1.1, 1.2]
+tamanho: M         # P | M | G (define número e tamanho dos passos; ver AGENTS.md)
 ---
 
 # X.Y — <título>
@@ -47,7 +48,7 @@ def exemplo(arg: Tipo) -> Retorno: ...
 
 ## Passos
 
-De 3 a 8 passos. Cada um: um comportamento testável, até ~3 arquivos, até ~150 linhas de diff, 15–30 min, e termina com os testes passando.
+Número e tamanho dos passos conforme o `tamanho` da tarefa (tabela do "Ritmo de trabalho" no `AGENTS.md`): P = 1 a 2, M = 2 a 4, G = 4 a 6. Cada um: uma entrega coerente e testável, ~30–60 min, e termina com os testes passando.
 
 | # | Passo | Arquivos | Requisitos cobertos | Como o usuário testa | Status |
 | --- | --- | --- | --- | --- | --- |

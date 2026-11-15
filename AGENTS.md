@@ -35,12 +35,19 @@ Regras:
 - Se a spec estiver ambígua ou errada, pare e pergunte; não decida sozinho.
 - Uma tarefa pode ser implementada por um agente e verificada pelo outro; a spec é o contrato entre eles.
 
-## Ritmo de trabalho: passos pequenos e explicados
+## Ritmo de trabalho: passos do tamanho da tarefa, sempre explicados
 
-O dono do projeto é júnior e precisa entender e defender cada linha numa entrevista técnica. Por isso, nunca implemente uma tarefa inteira de uma vez.
+O dono do projeto é júnior e precisa entender e defender cada linha numa entrevista técnica. Por isso, nunca implemente uma tarefa inteira de uma vez sem parar para explicar.
 
-1. **Toda spec quebra a tarefa em passos** (seção "Passos" do template), de 3 a 8.
-2. **Cada passo é pequeno:** um comportamento testável, poucos arquivos (idealmente até 3), diff de até ~150 linhas, cerca de 15 a 30 minutos. Ao terminar, os testes passam e o projeto roda.
+1. **Toda spec estima o tamanho da tarefa** (campo `tamanho` do template) e quebra a tarefa em passos de acordo com ele:
+
+   | Tamanho | Exemplos | Passos | Cada passo |
+   | --- | --- | --- | --- |
+   | P (pequena) | configuração, esqueleto, ajuste pontual | 1 a 2 | até ~5 arquivos, ~200 linhas de diff |
+   | M (média) | um módulo com testes (`pii.py`, `judge.py`) | 2 a 4 | até ~5 arquivos, ~300 linhas de diff |
+   | G (grande) | grafo, API, tela com vários estados | 4 a 6 | até ~5 arquivos, ~300 linhas de diff |
+
+2. **Cada passo é uma entrega coerente:** um conjunto de comportamentos relacionados e testáveis, cerca de 30 a 60 minutos. Ao terminar, os testes passam e o projeto roda.
 3. **Um passo por vez.** Ao fim de cada passo, PARE, entregue a explicação abaixo e espere o usuário dizer "próximo" (ou pedir ajuste). Não comece o passo seguinte por conta própria.
 4. **Commit por passo**, depois que o usuário confirmar: `feat(1.4.2): ...` (tarefa 1.4, passo 2).
 5. Se um passo crescer além do combinado, pare e proponha dividi-lo na spec.

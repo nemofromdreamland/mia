@@ -29,7 +29,7 @@ Tudo que depende da AWS fica pronto até segunda à noite; terça fica só para 
 4. Você revisa todo `terraform apply`, `destroy` e criação de recurso; chaves nunca no chat.
 5. Tarefas marcadas **Você** não são delegadas: console, rótulos do golden set, gravação do vídeo.
 6. Ao terminar um módulo, peça ao agente para explicar o código; você vai precisar defendê-lo na entrevista.
-7. Toda tarefa é quebrada em passos pequenos na spec. O agente faz um passo por vez, para, explica (contexto, o que fez, como, como testar, o que você deve ver) e só segue quando você disser "próximo". Detalhes na seção "Ritmo de trabalho" do `AGENTS.md`.
+7. Toda tarefa é quebrada em passos na spec, em número e tamanho proporcionais à tarefa (P, M ou G). O agente faz um passo por vez, para, explica (contexto, o que fez, como, como testar, o que você deve ver) e só segue quando você disser "próximo". Detalhes na seção "Ritmo de trabalho" do `AGENTS.md`.
 
 ## Caminho crítico
 
