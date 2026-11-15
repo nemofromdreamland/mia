@@ -1,7 +1,10 @@
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
 
 import mia.llm as llm
 from mia.llm import (
@@ -9,9 +12,12 @@ from mia.llm import (
     ModelsConfig,
     build_chat_model,
     estimate_cost,
+    hash_input,
+    invoke,
     load_models_config,
     resolve_model,
 )
+from mia.schemas import RunRecord
 
 FIXTURE_MODELS = Path(__file__).parent / "fixtures" / "models.yaml"
 SRC_DIR = Path(__file__).parents[1] / "src" / "mia"
@@ -192,3 +198,177 @@ def test_only_llm_module_touches_langchain_models_or_provider_packages() -> None
     ]
 
     assert offenders == []
+
+
+# --- invoke + RunRecord (R5-R9) ----------------------------------------------
+
+
+class _FailingChatModel(GenericFakeChatModel):
+    """Fake provider that blows up on every call."""
+
+    def _generate(self, *args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("boom")
+
+
+def _fake_model(*replies: str | AIMessage) -> GenericFakeChatModel:
+    return GenericFakeChatModel(messages=iter(replies))
+
+
+def _reply(text: str, input_tokens: int = 12, output_tokens: int = 3) -> AIMessage:
+    return AIMessage(
+        content=text,
+        usage_metadata={
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": input_tokens + output_tokens,
+        },
+    )
+
+
+def _today_file(runs_dir: Path, experiment: str) -> Path:
+    return runs_dir / f"{datetime.now(UTC).date().isoformat()}_{experiment}.jsonl"
+
+
+def _read_records(path: Path) -> list[RunRecord]:
+    return [RunRecord.model_validate_json(line) for line in path.read_text("utf-8").splitlines()]
+
+
+def _invoke(cfg: ModelsConfig, runs_dir: Path, chat_model: Any, **overrides: Any) -> str:
+    kwargs: dict[str, Any] = {
+        "prompt_name": "smoke",
+        "prompt_version": 1,
+        "system": "s",
+        "user": "u",
+        "input": {"q": "u"},
+        "experiment": "test",
+        "config": cfg,
+        "runs_dir": runs_dir,
+        "chat_model": chat_model,
+    }
+    kwargs.update(overrides)
+    return invoke(**kwargs)
+
+
+def test_invoke_returns_text_and_writes_one_valid_run_record(
+    cfg: ModelsConfig, tmp_path: Path
+) -> None:
+    before = datetime.now(UTC)
+
+    text = _invoke(
+        cfg,
+        tmp_path,
+        _fake_model(_reply("olá")),
+        params={"temperature": 0.2},
+        session_id="01JCASE0000000000000000000",
+    )
+
+    assert text == "olá"
+    records = _read_records(_today_file(tmp_path, "test"))
+    assert len(records) == 1
+    record = records[0]
+    assert record.prompt_name == "smoke"
+    assert record.prompt_version == 1
+    assert record.experiment == "test"
+    assert record.session_id == "01JCASE0000000000000000000"
+    assert record.provider == "gemini"
+    assert record.model == "test-flash"
+    assert record.params == {"temperature": 0.2}
+    assert record.input == {"q": "u"}
+    assert record.input_hash == hash_input("s", "u")
+    assert record.output_raw == "olá"
+    assert record.output_parsed is None
+    assert record.json_valid_first_try is None
+    assert record.repaired is None
+    assert (record.input_tokens, record.output_tokens) == (12, 3)
+    # free_tier model: the reference (paid) price is still recorded
+    assert record.cost_usd == pytest.approx(12 * 0.10 / 1e6 + 3 * 0.40 / 1e6)
+    assert record.error is None
+    assert record.latency_ms >= 0
+    assert record.created_at.utcoffset() == timedelta(0)
+    assert before <= record.created_at <= datetime.now(UTC)
+
+
+def test_invoke_same_input_same_hash_new_run_id_each_call(
+    cfg: ModelsConfig, tmp_path: Path
+) -> None:
+    model = _fake_model(_reply("a"), _reply("b"), _reply("c"))
+
+    _invoke(cfg, tmp_path, model)
+    _invoke(cfg, tmp_path, model)
+    _invoke(cfg, tmp_path, model, user="outra pergunta")
+
+    first, second, third = _read_records(_today_file(tmp_path, "test"))
+    assert first.input_hash == second.input_hash
+    assert first.run_id != second.run_id
+    assert third.input_hash != first.input_hash
+
+
+def test_hash_input_does_not_confuse_system_and_user_boundaries() -> None:
+    assert hash_input("ab", "c") != hash_input("a", "bc")
+    assert len(hash_input("s", "u")) == 64
+
+
+def test_invoke_records_provider_error_and_reraises(cfg: ModelsConfig, tmp_path: Path) -> None:
+    with pytest.raises(RuntimeError, match="boom"):
+        _invoke(cfg, tmp_path, _FailingChatModel(messages=iter([])))
+
+    (record,) = _read_records(_today_file(tmp_path, "test"))
+    assert record.error == "RuntimeError: boom"
+    assert record.output_raw == ""
+    assert (record.input_tokens, record.output_tokens, record.cost_usd) == (0, 0, 0.0)
+    assert record.latency_ms >= 0
+
+
+def test_invoke_appends_and_creates_missing_runs_dir(cfg: ModelsConfig, tmp_path: Path) -> None:
+    runs_dir = tmp_path / "novo"
+    model = _fake_model(_reply("a"), _reply("b"))
+
+    _invoke(cfg, runs_dir, model)
+    _invoke(cfg, runs_dir, model)
+
+    assert [r.output_raw for r in _read_records(_today_file(runs_dir, "test"))] == ["a", "b"]
+
+
+def test_invoke_without_experiment_writes_adhoc_file(cfg: ModelsConfig, tmp_path: Path) -> None:
+    _invoke(cfg, tmp_path, _fake_model(_reply("a")), experiment=None)
+
+    (record,) = _read_records(_today_file(tmp_path, "adhoc"))
+    assert record.experiment is None
+
+
+def test_invoke_without_usage_metadata_records_zero_tokens(
+    cfg: ModelsConfig, tmp_path: Path
+) -> None:
+    _invoke(cfg, tmp_path, _fake_model("sem uso"))
+
+    (record,) = _read_records(_today_file(tmp_path, "test"))
+    assert (record.input_tokens, record.output_tokens, record.cost_usd) == (0, 0, 0.0)
+
+
+def test_invoke_defaults_load_real_config_and_build_model_from_it(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    built: list[tuple[str, dict[str, Any]]] = []
+
+    def fake_init_chat_model(model: str, **kwargs: Any) -> GenericFakeChatModel:
+        built.append((model, kwargs))
+        return _fake_model(_reply("ok", 1000, 1000))
+
+    monkeypatch.setattr(llm, "init_chat_model", fake_init_chat_model)
+
+    text = invoke(
+        prompt_name="smoke",
+        prompt_version=1,
+        system="s",
+        user="u",
+        input={},
+        params={"temperature": 0},
+        runs_dir=tmp_path,
+    )
+
+    real = load_models_config()
+    default = real.models[real.default]
+    assert text == "ok"
+    assert built == [(default.model, {"model_provider": "google_genai", "temperature": 0})]
+    (record,) = _read_records(_today_file(tmp_path, "adhoc"))
+    assert record.cost_usd == estimate_cost(default, 1000, 1000)

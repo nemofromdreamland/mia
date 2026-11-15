@@ -4,18 +4,28 @@ Chooses provider/model from config/models.yaml, builds the chat model with LangC
 ``init_chat_model`` and records every call as a RunRecord in runs/*.jsonl.
 """
 
+import hashlib
+import json
+import time
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast, get_args
 
 import yaml
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from mia.schemas import RunRecord
 
 Provider = Literal["bedrock", "gemini", "groq"]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODELS_PATH = REPO_ROOT / "config" / "models.yaml"
+DEFAULT_RUNS_DIR = REPO_ROOT / "runs"
+NO_EXPERIMENT = "adhoc"  # file name part when experiment is None
 
 # Our provider names (RunRecord.provider) -> LangChain's model_provider names.
 LANGCHAIN_PROVIDERS: dict[Provider, str] = {
@@ -113,3 +123,99 @@ def estimate_cost(spec: ModelSpec, input_tokens: int, output_tokens: int) -> flo
         input_tokens * spec.usd_per_mtok_input + output_tokens * spec.usd_per_mtok_output
     ) / 1_000_000
     return round(cost, 8)
+
+
+def hash_input(system: str, user: str) -> str:
+    """SHA-256 of the exact messages sent; same messages -> same hash (cache, consistency)."""
+    canonical = json.dumps({"system": system, "user": user}, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def append_run_record(record: RunRecord, runs_dir: Path = DEFAULT_RUNS_DIR) -> Path:
+    """Append one JSON line to runs/<UTC date>_<experiment>.jsonl and return the file path."""
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    name = f"{record.created_at.date().isoformat()}_{record.experiment or NO_EXPERIMENT}.jsonl"
+    path = runs_dir / name
+    with path.open("a", encoding="utf-8") as file:
+        file.write(record.model_dump_json() + "\n")
+    return path
+
+
+def _elapsed_ms(started: float) -> int:
+    return int((time.perf_counter() - started) * 1000)
+
+
+def invoke(
+    *,
+    prompt_name: str,
+    prompt_version: int,
+    system: str,
+    user: str,
+    input: dict[str, Any],
+    model: str | None = None,
+    params: dict[str, Any] | None = None,
+    experiment: str | None = None,
+    session_id: str | None = None,
+    config: ModelsConfig | None = None,
+    runs_dir: Path = DEFAULT_RUNS_DIR,
+    chat_model: BaseChatModel | None = None,
+) -> str:
+    """Call the model with already-rendered messages, record a RunRecord, return the text.
+
+    ``input`` holds the (already masked) variables, saved as-is in the record.
+    ``chat_model`` lets tests inject a fake model; by default it is built from the config.
+    """
+    spec = resolve_model(model, config or load_models_config())
+    params = dict(params or {})
+    llm = chat_model or build_chat_model(spec, params)
+
+    record = {
+        "run_id": uuid.uuid4().hex,
+        "experiment": experiment,
+        "session_id": session_id,
+        "prompt_name": prompt_name,
+        "prompt_version": prompt_version,
+        "provider": spec.provider,
+        "model": spec.model,
+        "params": params,
+        "input_hash": hash_input(system, user),
+        "input": input,
+        "output_parsed": None,  # structured output arrives in task 1.5
+        "json_valid_first_try": None,
+        "repaired": None,
+        "created_at": datetime.now(UTC),
+    }
+
+    started = time.perf_counter()
+    try:
+        response = llm.invoke([SystemMessage(system), HumanMessage(user)])
+    except Exception as exc:
+        failed = RunRecord(
+            **record,
+            output_raw="",
+            input_tokens=0,
+            output_tokens=0,
+            latency_ms=_elapsed_ms(started),
+            cost_usd=0.0,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        append_run_record(failed, runs_dir)
+        raise
+
+    latency_ms = _elapsed_ms(started)
+    usage = response.usage_metadata or {}
+    input_tokens = usage.get("input_tokens", 0)
+    output_tokens = usage.get("output_tokens", 0)
+    append_run_record(
+        RunRecord(
+            **record,
+            output_raw=response.text,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            latency_ms=latency_ms,
+            cost_usd=estimate_cost(spec, input_tokens, output_tokens),
+            error=None,
+        ),
+        runs_dir,
+    )
+    return response.text
