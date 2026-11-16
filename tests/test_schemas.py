@@ -146,7 +146,9 @@ def test_case_defaults_language_to_pt_br() -> None:
     assert Case(**_case_fields()).language == "pt-BR"
 
 
-@pytest.mark.parametrize("field, value", [("persona", "ceo"), ("level", "senior")])
+@pytest.mark.parametrize(
+    "field, value", [("persona", "ceo"), ("level", "senior"), ("language", "es-ES")]
+)
 def test_case_rejects_values_outside_literals(field: str, value: str) -> None:
     with pytest.raises(ValidationError):
         Case(**_case_fields(**{field: value}))
@@ -423,6 +425,11 @@ def test_competency_score_rejects_score_outside_1_5(value: float) -> None:
         CompetencyScore(competency="python", score=value, summary="x")
 
 
+@pytest.mark.parametrize("value", [1.0, 5.0])
+def test_competency_score_accepts_score_limits(value: float) -> None:
+    assert CompetencyScore(competency="python", score=value, summary="x").score == value
+
+
 @pytest.mark.parametrize("value", [0.99, 5.01])
 def test_report_rejects_overall_score_outside_1_5(value: float) -> None:
     with pytest.raises(ValidationError):
@@ -569,9 +576,13 @@ def test_session_requires_visitor_id() -> None:
         Session(**fields)
 
 
-def test_session_rejects_unknown_status() -> None:
+@pytest.mark.parametrize(
+    "field, value",
+    [("status", "done"), ("mode", "video"), ("language", "es-ES"), ("persona", "ceo")],
+)
+def test_session_rejects_values_outside_literals(field: str, value: str) -> None:
     with pytest.raises(ValidationError):
-        Session(**_session_fields(status="done"))
+        Session(**_session_fields(**{field: value}))
 
 
 def test_session_minimal_uses_defaults() -> None:
@@ -600,6 +611,11 @@ def test_golden_item_rejects_unknown_split_and_variant() -> None:
 def test_golden_item_rejects_human_score_outside_1_5(value: int) -> None:
     with pytest.raises(ValidationError):
         GoldenItem(**_golden_fields(human_score=value))
+
+
+@pytest.mark.parametrize("value", [1, 5])
+def test_golden_item_accepts_human_score_limits(value: int) -> None:
+    assert GoldenItem(**_golden_fields(human_score=value)).human_score == value
 
 
 @pytest.mark.parametrize(
