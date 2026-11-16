@@ -14,7 +14,9 @@ from mia.interviewer import (
     StepResult,
     TimeStatus,
     answer,
+    end_interview,
     next_question,
+    score_answer,
     start,
     time_check,
 )
@@ -281,3 +283,129 @@ def test_writer_gets_recent_history_only(plan: InterviewPlan) -> None:
         ).state
     assert all(len(h) <= 2 for h in seen)
     assert seen[-1][-1].answer_text == "R."
+
+
+# --- endings and judge -------------------------------------------------------
+
+
+def last_question_state(plan: InterviewPlan) -> InterviewState:
+    return started(plan).model_copy(update={"current_index": len(plan.questions) - 1})
+
+
+def test_plan_done_ends_with_closing_turn(plan: InterviewPlan) -> None:
+    result = reply(last_question_state(plan), "Resposta.", FakeDecider(advance()))
+    assert result.state.ended is True
+    assert result.state.end_reason == "plan_done"
+    assert result.next_turn.interviewer_text.startswith("[closing]")
+    assert result.next_turn.question_id == plan.questions[-1].id
+    assert result.next_turn.is_follow_up is False
+    assert result.state.turns[-1] == result.next_turn
+    assert result.state.turn_count == 2
+
+
+def test_llm_end_on_last_question_ends(plan: InterviewPlan) -> None:
+    decision = ToolDecision(action="end", reason="acabou")
+    result = reply(last_question_state(plan), "Resposta.", FakeDecider(decision))
+    assert result.state.ended is True
+    assert result.state.end_reason == "plan_done"
+
+
+def test_time_over_ends_without_calling_decider(plan: InterviewPlan) -> None:
+    decider = FakeDecider()
+    result = reply(started(plan), "Resposta.", decider, minute=16)
+    assert decider.calls == []
+    assert result.state.ended is True
+    assert result.state.end_reason == "time_or_turns"
+    assert result.answered.answer_text == "Resposta."
+    assert result.answered.decision is None
+
+
+def test_turn_limit_ends_without_calling_decider(plan: InterviewPlan) -> None:
+    decider = FakeDecider()
+    state = started(plan).model_copy(update={"turn_count": 30})
+    result = reply(state, "Resposta.", decider)
+    assert decider.calls == []
+    assert result.state.end_reason == "time_or_turns"
+
+
+def test_visitor_ends_without_model(plan: InterviewPlan) -> None:
+    state = started(plan)
+    ended, turn = end_interview(
+        state, "visitor", writer=fake_writer, clock=clock_at(T0 + timedelta(minutes=2))
+    )
+    assert ended.ended is True
+    assert ended.end_reason == "visitor"
+    assert ended.turns[-1] == turn
+    assert ended.turn_count == 2
+    assert turn.turn_no == 2
+    assert state.ended is False  # original untouched
+
+
+def test_end_interview_twice_rejected(plan: InterviewPlan) -> None:
+    ended, _ = end_interview(started(plan), "visitor", writer=fake_writer, clock=clock_at(T0))
+    with pytest.raises(InterviewError):
+        end_interview(ended, "visitor", writer=fake_writer, clock=clock_at(T0))
+
+
+def good_score() -> AnswerScore:
+    return AnswerScore(
+        score=4,
+        criteria_met=["c1"],
+        evidence_quotes=["Fiz um painel."],
+        justification="ok",
+    )
+
+
+def test_score_is_attached_to_answered_turn(plan: InterviewPlan) -> None:
+    seen: list[tuple[str, str]] = []
+
+    def scorer(question: Question, text: str) -> AnswerScore:
+        seen.append((question.id, text))
+        return good_score()
+
+    result = answer(
+        started(plan),
+        "Fiz um painel. ana@exemplo.com",
+        decider=FakeDecider(advance()),
+        writer=fake_writer,
+        scorer=scorer,
+        clock=clock_at(T0),
+    )
+    assert result.answered.score == good_score()
+    assert seen == [("q1", "Fiz um painel. [EMAIL]")]
+
+
+def test_scorer_failure_does_not_block_next_turn(plan: InterviewPlan) -> None:
+    def broken(question: Question, text: str) -> AnswerScore:
+        raise RuntimeError("judge down")
+
+    result = answer(
+        started(plan),
+        "Resposta.",
+        decider=FakeDecider(advance()),
+        writer=fake_writer,
+        scorer=broken,
+        clock=clock_at(T0),
+    )
+    assert result.answered.score is None
+    assert result.next_turn.question_id == "q2"
+
+
+def test_score_answer_swallows_errors(plan: InterviewPlan) -> None:
+    def broken(question: Question, text: str) -> AnswerScore:
+        raise ValueError("bad")
+
+    assert score_answer(broken, plan.questions[0], "x") is None
+    assert score_answer(lambda q, a: good_score(), plan.questions[0], "x") == good_score()
+
+
+def test_time_over_still_scores_last_answer(plan: InterviewPlan) -> None:
+    result = answer(
+        started(plan),
+        "Resposta.",
+        decider=FakeDecider(),
+        writer=fake_writer,
+        scorer=lambda q, a: good_score(),
+        clock=clock_at(T0 + timedelta(minutes=20)),
+    )
+    assert result.answered.score == good_score()

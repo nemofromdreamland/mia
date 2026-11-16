@@ -24,6 +24,8 @@ ASK_INSTRUCTION = (
     "Faça a pergunta abaixo ao candidato, com uma frase curta de transição se fizer sentido."
 )
 FOLLOW_UP_INSTRUCTION = "Aprofunde a resposta anterior fazendo a pergunta abaixo, sem avaliar."
+CLOSING_INSTRUCTION = "Encerre a entrevista agradecendo ao candidato, sem avaliar nem dar feedback."
+CLOSING_TEXT = "Agradeça a participação e informe que a entrevista terminou."
 
 
 class InterviewError(Exception):
@@ -115,8 +117,8 @@ def start(
 
 class StepResult(BaseModel):
     state: InterviewState
-    answered: Turn  # the answered turn, with decision (score comes in step 3)
-    next_turn: Turn  # next speech: follow-up or next question
+    answered: Turn  # the answered turn, with decision and score
+    next_turn: Turn  # next speech: follow-up, next question or closing
 
 
 def _validate_answer(state: InterviewState, text: str, limits: InterviewLimits) -> None:
@@ -144,6 +146,46 @@ def _history(turns: list[Turn], limits: InterviewLimits) -> list[Turn]:
     return turns[-limits.history_turns :]
 
 
+def score_answer(scorer: Scorer, question: Question, answer: str) -> AnswerScore | None:
+    """Run the judge; a failure must never block the interview, so it yields None."""
+    try:
+        return scorer(question, answer)
+    except Exception:  # noqa: BLE001 - the judge is best-effort by design (R12)
+        return None
+
+
+def end_interview(
+    state: InterviewState,
+    reason: EndReason,
+    *,
+    writer: Writer,
+    clock: Clock,
+    limits: InterviewLimits = DEFAULT_LIMITS,
+) -> tuple[InterviewState, Turn]:
+    """Close the interview with a farewell turn; returns the ended state and that turn."""
+    if state.ended:
+        raise InterviewError("the interview has already ended")
+    question = current_question(state)
+    turn = Turn(
+        session_id=state.session_id,
+        turn_no=state.turn_count + 1,
+        question_id=question.id,
+        interviewer_text=writer(
+            "closing", CLOSING_TEXT, CLOSING_INSTRUCTION, _history(state.turns, limits)
+        ),
+        created_at=clock(),
+    )
+    ended = state.model_copy(
+        update={
+            "turn_count": state.turn_count + 1,
+            "turns": [*state.turns, turn],
+            "ended": True,
+            "end_reason": reason,
+        }
+    )
+    return ended, turn
+
+
 def answer(
     state: InterviewState,
     text: str,
@@ -160,37 +202,71 @@ def answer(
     now = clock()
     question = current_question(state)
     status = time_check(state, now, limits)
-    decision = decider(question, masked, state, status)
+    decision = None if status.over else decider(question, masked, state, status)
 
-    answered = state.turns[-1].model_copy(update={"answer_text": masked, "decision": decision})
-    turns = [*state.turns[:-1], answered]
-    history = _history(turns, limits)
+    answered = state.turns[-1].model_copy(
+        update={
+            "answer_text": masked,
+            "decision": decision,
+            "score": score_answer(scorer, question, masked),
+        }
+    )
+    base = state.model_copy(update={"turns": [*state.turns[:-1], answered]})
 
+    if status.over:
+        return _close(base, answered, "time_or_turns", writer, clock, limits)
+    assert decision is not None
     if _wants_follow_up(decision, state, limits):
         assert decision.follow_up_text is not None
-        index, follow_ups, is_follow_up = state.current_index, state.follow_ups_used + 1, True
-        speech = writer(question.phase, decision.follow_up_text, FOLLOW_UP_INSTRUCTION, history)
-    else:
-        upcoming = next_question(state)
-        if upcoming is None:
-            raise NotImplementedError("closing the interview comes in step 3")
-        index, follow_ups, is_follow_up = state.current_index + 1, 0, False
-        speech = writer(upcoming.phase, upcoming.text, ASK_INSTRUCTION, history)
+        return _step(
+            base, answered, question.phase, decision.follow_up_text, True, writer, now, limits
+        )
+    upcoming = next_question(state)
+    if upcoming is None:
+        return _close(base, answered, "plan_done", writer, clock, limits)
+    return _step(base, answered, upcoming.phase, upcoming.text, False, writer, now, limits)
 
+
+def _close(
+    base: InterviewState,
+    answered: Turn,
+    reason: EndReason,
+    writer: Writer,
+    clock: Clock,
+    limits: InterviewLimits,
+) -> StepResult:
+    ended, turn = end_interview(base, reason, writer=writer, clock=clock, limits=limits)
+    return StepResult(state=ended, answered=answered, next_turn=turn)
+
+
+def _step(
+    base: InterviewState,
+    answered: Turn,
+    phase: Phase,
+    text: str,
+    is_follow_up: bool,
+    writer: Writer,
+    now: datetime,
+    limits: InterviewLimits,
+) -> StepResult:
+    """Ask a follow-up (same question) or the next plan question."""
+    index = base.current_index if is_follow_up else base.current_index + 1
+    follow_ups = base.follow_ups_used + 1 if is_follow_up else 0
+    instruction = FOLLOW_UP_INSTRUCTION if is_follow_up else ASK_INSTRUCTION
     next_turn = Turn(
-        session_id=state.session_id,
-        turn_no=state.turn_count + 1,
-        question_id=state.plan.questions[index].id,
-        interviewer_text=speech,
+        session_id=base.session_id,
+        turn_no=base.turn_count + 1,
+        question_id=base.plan.questions[index].id,
+        interviewer_text=writer(phase, text, instruction, _history(base.turns, limits)),
         is_follow_up=is_follow_up,
         created_at=now,
     )
-    new_state = state.model_copy(
+    new_state = base.model_copy(
         update={
             "current_index": index,
             "follow_ups_used": follow_ups,
-            "turn_count": state.turn_count + 1,
-            "turns": [*turns, next_turn],
+            "turn_count": base.turn_count + 1,
+            "turns": [*base.turns, next_turn],
         }
     )
     return StepResult(state=new_state, answered=answered, next_turn=next_turn)
