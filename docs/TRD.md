@@ -134,7 +134,7 @@ Cada prompt vive em `prompts/<nome>/v<N>.yaml` e nunca é editado depois de usad
 # prompts/judge/v2.yaml
 name: judge
 version: 2
-model: bedrock:anthropic.claude-haiku   # sobrescrevível por config
+model: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"   # igual à rota em config/models.yaml
 params: {temperature: 0.2, max_tokens: 800}
 output_schema: AnswerScore
 changelog: "Rubrica ancorada por nível; instrução contra viés de verbosidade"

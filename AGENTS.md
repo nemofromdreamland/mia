@@ -45,6 +45,7 @@ Regras:
 - Toda saída de LLM é validada por um schema de `src/mia/schemas.py` (Pydantic). Nada de dict solto.
 - Toda chamada a modelo grava um `RunRecord` em `runs/*.jsonl`.
 - Prompts vivem em `prompts/<nome>/v<N>.yaml`. Prompt já usado em experimento nunca é editado: crie nova versão e registre no `changelog`.
+- Modelo em uso: quem decide é `config/models.yaml` (`prompt_models` > `model` do YAML do prompt). Desenvolvimento e avaliação rodam no Claude Haiku (Bedrock); `synthetic_candidate` no Groq. Gemini só na comparação de provedores (tarefa 6.1), nunca como padrão. Os YAMLs antigos dizem `gemini:` por histórico; não copie esse campo. Versão nova de prompt: `model` = a rota dele em `prompt_models`. Prompt novo: entra em `prompt_models`. `tests/test_prompt_models_guard.py` garante isso.
 - `pii.py` mascara dados pessoais ANTES de qualquer chamada a LLM. Texto do usuário vai sempre entre delimitadores e é tratado como dado, nunca como instrução.
 - O LLM redige; o código decide: regras de estado, limites, citações literais e transições são determinísticas.
 - Não existe login. `visitor_id` vem sempre do header `X-Visitor-Id` validado (UUID v4), nunca do corpo; toda operação de sessão filtra por ele.

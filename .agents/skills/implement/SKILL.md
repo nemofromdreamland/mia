@@ -13,7 +13,7 @@ Implemente **apenas o próximo passo pendente** da tarefa indicada pelo usuário
 1. Abra a spec. Se `status` não for `aprovada`, pare e avise (o status só muda para `implementada` no último passo). Se houver perguntas em aberto sem resposta, pare e pergunte.
 2. Ache o primeiro passo com status `pendente` na tabela "Passos". Diga em uma linha qual passo vai fazer ("Passo 2 de 5: …").
 3. Testes primeiro: escreva os testes deste passo e rode só eles (`uv run pytest tests/<arquivo> -q`) para ver falharem pelo motivo certo.
-4. Implemente o mínimo para os testes do passo passarem, respeitando as regras de arquitetura do `AGENTS.md` (e o `docs/design/`, se for frontend).
+4. Implemente o mínimo para os testes do passo passarem, respeitando as regras de arquitetura do `AGENTS.md` (e o `docs/design/`, se for frontend). Ao criar versão ou prompt novo, o `model` vem de `config/models.yaml` (`prompt_models`), nunca da versão anterior.
 5. Rode `uv run pytest -q` e `uv run ruff check .` até passarem. Rode `uv run ruff format .`.
 6. Não toque em nada fora deste passo. Se o passo crescer além do limite do `tamanho` da spec (P: ~200 linhas de diff; M/G: ~300; até ~5 arquivos), pare e proponha dividi-lo na spec.
 7. Atualize a spec: status do passo para `feito` e uma linha em "Notas de implementação" com as decisões tomadas. Se era o último passo, mude o `status` da spec para `implementada`.
