@@ -38,8 +38,6 @@ Regras:
 - Se a spec estiver ambígua ou errada, pare e pergunte; não decida sozinho.
 - Uma tarefa pode ser implementada por um agente e verificada pelo outro; a spec é o contrato entre eles.
 - O dono do projeto é júnior e precisa entender cada linha: um passo por vez, sempre explicado, esperando "próximo" antes de seguir. Commit por passo, depois da confirmação: `feat(1.4.2): ...` (tarefa 1.4, passo 2).
-- Não dê dicas do que falar em entrevista de emprego.
-
 ## Regras de arquitetura (não negociáveis)
 
 - `src/mia/llm.py` é o ÚNICO lugar que chama modelos ou importa SDK de provedor (LangChain `init_chat_model`). Todo o resto chama `llm.py`.
