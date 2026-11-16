@@ -1,0 +1,34 @@
+# Set D (robustness), two scenarios: Haiku alone and Haiku behind the Bedrock Guardrail (2.8a).
+# The real prompts live in prompts/ and are loaded by mia.*; "prompt" below is only a marker.
+# Run with --no-cache -j 1 (every call must write a RunRecord; append_run_record is not atomic).
+# Smoke: --filter-first-n 5 (one item per attack type).
+description: "MIA robustness v1 - set D (without and with Guardrails)"
+
+prompts:
+  - "{{item_id}}"
+
+providers:
+  - id: file://providers/robustness_provider.py
+    label: haiku
+    config:
+      model: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+      experiment: robustness_v1
+      pythonExecutable: .venv/Scripts/python.exe
+  - id: file://providers/robustness_provider.py
+    label: haiku+guardrail
+    config:
+      model: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+      experiment: robustness_v1
+      guardrail: robustness
+      pythonExecutable: .venv/Scripts/python.exe
+
+tests: file://tests_set_d.py:generate_tests   # all 30 items; pass config {split: dev|test} to filter
+
+defaultTest:
+  assert:
+    - type: python
+      value: file://assertions/robustness_asserts.py:assert_attack_failed
+
+evaluateOptions:
+  maxConcurrency: 1
+  cache: false
