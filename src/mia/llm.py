@@ -7,6 +7,7 @@ Chooses provider/model from config/models.yaml, builds the chat model with LangC
 import hashlib
 import json
 import os
+import re
 import time
 import uuid
 from collections.abc import Callable
@@ -18,7 +19,7 @@ from urllib.parse import quote, quote_plus
 import yaml
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables.retry import ExponentialJitterParams
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 
@@ -52,6 +53,10 @@ LANGCHAIN_PROVIDERS: dict[Provider, str] = {
     "gemini": "google_genai",
     "groq": "groq",
 }
+
+
+class LLMInvalidOutputError(Exception):
+    """Model output failed the schema even after one repair attempt."""
 
 
 class ModelConfigError(Exception):
@@ -205,6 +210,121 @@ def _elapsed_ms(started: float) -> int:
     return int((time.perf_counter() - started) * 1000)
 
 
+_FENCE = re.compile(r"^\s*```[a-zA-Z]*\s*\n(.*?)\n?```\s*$", re.DOTALL)
+
+
+def parse_structured[T: BaseModel](raw: str, schema: type[T]) -> T:
+    """Parse model text as JSON and validate it; markdown fences are stripped first.
+
+    Raises ValueError (bad JSON) or pydantic.ValidationError (wrong shape).
+    """
+    fenced = _FENCE.match(raw)
+    text = fenced.group(1) if fenced else raw
+    return schema.model_validate(json.loads(text))
+
+
+def _start(
+    *,
+    model: str | None,
+    params: dict[str, Any] | None,
+    config: ModelsConfig | None,
+    chat_model: BaseChatModel | None,
+) -> tuple[ModelSpec, dict[str, Any], Any]:
+    """Resolve the model and wrap it with the retry policy (retries are internal)."""
+    spec = resolve_model(model, config or load_models_config())
+    params = dict(params or {})
+    llm = chat_model or build_chat_model(spec, params)
+    runnable = llm.with_retry(
+        stop_after_attempt=spec.max_retries + 1,
+        wait_exponential_jitter=True,
+        exponential_jitter_params=RETRY_WAIT,
+    )
+    return spec, params, runnable
+
+
+def _base_record(
+    *,
+    spec: ModelSpec,
+    params: dict[str, Any],
+    prompt_name: str,
+    prompt_version: int,
+    system: str,
+    user: str,
+    input: dict[str, Any],
+    experiment: str | None,
+    session_id: str | None,
+) -> dict[str, Any]:
+    return {
+        "run_id": uuid.uuid4().hex,
+        "experiment": experiment,
+        "session_id": session_id,
+        "prompt_name": prompt_name,
+        "prompt_version": prompt_version,
+        "provider": spec.provider,
+        "model": spec.model,
+        "params": params,
+        "input_hash": hash_input(system, user),
+        "input": input,
+        "output_parsed": None,
+        "json_valid_first_try": None,
+        "repaired": None,
+        "created_at": datetime.now(UTC),
+    }
+
+
+def _call(
+    runnable: Any,
+    messages: list[Any],
+    record: dict[str, Any],
+    runs_dir: Path,
+    on_record: RecordObserver | None,
+) -> tuple[AIMessage, int]:
+    """One model call. On provider failure: write the error RunRecord and re-raise."""
+    started = time.perf_counter()
+    try:
+        response = runnable.invoke(messages)
+    except Exception as exc:
+        failed = RunRecord(
+            **record,
+            output_raw="",
+            input_tokens=0,
+            output_tokens=0,
+            latency_ms=_elapsed_ms(started),
+            cost_usd=0.0,
+            error=redact_secrets(f"{type(exc).__name__}: {exc}"),
+        )
+        append_run_record(failed, runs_dir, on_record)
+        raise
+    return response, _elapsed_ms(started)
+
+
+def _write_success(
+    *,
+    spec: ModelSpec,
+    record: dict[str, Any],
+    response: AIMessage,
+    latency_ms: int,
+    runs_dir: Path,
+    on_record: RecordObserver | None,
+) -> None:
+    usage = response.usage_metadata or {}
+    input_tokens = usage.get("input_tokens", 0)
+    output_tokens = usage.get("output_tokens", 0)
+    append_run_record(
+        RunRecord(
+            **record,
+            output_raw=response.text,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            latency_ms=latency_ms,
+            cost_usd=estimate_cost(spec, input_tokens, output_tokens),
+            error=None,
+        ),
+        runs_dir,
+        on_record,
+    )
+
+
 def invoke(
     *,
     prompt_name: str,
@@ -227,65 +347,81 @@ def invoke(
     ``chat_model`` lets tests inject a fake model; by default it is built from the config.
     ``on_record`` receives the exact record and path after persistence (success or failure).
     """
-    spec = resolve_model(model, config or load_models_config())
-    params = dict(params or {})
-    llm = chat_model or build_chat_model(spec, params)
-
-    record = {
-        "run_id": uuid.uuid4().hex,
-        "experiment": experiment,
-        "session_id": session_id,
-        "prompt_name": prompt_name,
-        "prompt_version": prompt_version,
-        "provider": spec.provider,
-        "model": spec.model,
-        "params": params,
-        "input_hash": hash_input(system, user),
-        "input": input,
-        "output_parsed": None,  # structured output arrives in task 1.5
-        "json_valid_first_try": None,
-        "repaired": None,
-        "created_at": datetime.now(UTC),
-    }
-
-    # One RunRecord per invoke: retries are internal and their waits count as latency.
-    runnable = llm.with_retry(
-        stop_after_attempt=spec.max_retries + 1,
-        wait_exponential_jitter=True,
-        exponential_jitter_params=RETRY_WAIT,
+    spec, params, runnable = _start(
+        model=model, params=params, config=config, chat_model=chat_model
     )
-
-    started = time.perf_counter()
-    try:
-        response = runnable.invoke([SystemMessage(system), HumanMessage(user)])
-    except Exception as exc:
-        failed = RunRecord(
-            **record,
-            output_raw="",
-            input_tokens=0,
-            output_tokens=0,
-            latency_ms=_elapsed_ms(started),
-            cost_usd=0.0,
-            error=redact_secrets(f"{type(exc).__name__}: {exc}"),
-        )
-        append_run_record(failed, runs_dir, on_record)
-        raise
-
-    latency_ms = _elapsed_ms(started)
-    usage = response.usage_metadata or {}
-    input_tokens = usage.get("input_tokens", 0)
-    output_tokens = usage.get("output_tokens", 0)
-    append_run_record(
-        RunRecord(
-            **record,
-            output_raw=response.text,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            latency_ms=latency_ms,
-            cost_usd=estimate_cost(spec, input_tokens, output_tokens),
-            error=None,
-        ),
-        runs_dir,
-        on_record,
+    record = _base_record(
+        spec=spec,
+        params=params,
+        prompt_name=prompt_name,
+        prompt_version=prompt_version,
+        system=system,
+        user=user,
+        input=input,
+        experiment=experiment,
+        session_id=session_id,
+    )
+    messages = [SystemMessage(system), HumanMessage(user)]
+    response, latency_ms = _call(runnable, messages, record, runs_dir, on_record)
+    _write_success(
+        spec=spec,
+        record=record,
+        response=response,
+        latency_ms=latency_ms,
+        runs_dir=runs_dir,
+        on_record=on_record,
     )
     return response.text
+
+
+def invoke_structured[T: BaseModel](
+    *,
+    output_schema: type[T],
+    prompt_name: str,
+    prompt_version: int,
+    system: str,
+    user: str,
+    input: dict[str, Any],
+    model: str | None = None,
+    params: dict[str, Any] | None = None,
+    experiment: str | None = None,
+    session_id: str | None = None,
+    config: ModelsConfig | None = None,
+    runs_dir: Path = DEFAULT_RUNS_DIR,
+    chat_model: BaseChatModel | None = None,
+    on_record: RecordObserver | None = None,
+) -> T:
+    """Like ``invoke`` but validates the answer against ``output_schema``.
+
+    Step 2: happy path only; invalid output still propagates the parse error
+    (the single repair attempt and LLMInvalidOutputError arrive in step 3).
+    """
+    spec, params, runnable = _start(
+        model=model, params=params, config=config, chat_model=chat_model
+    )
+    record = _base_record(
+        spec=spec,
+        params=params,
+        prompt_name=prompt_name,
+        prompt_version=prompt_version,
+        system=system,
+        user=user,
+        input=input,
+        experiment=experiment,
+        session_id=session_id,
+    )
+    messages = [SystemMessage(system), HumanMessage(user)]
+    response, latency_ms = _call(runnable, messages, record, runs_dir, on_record)
+    parsed = parse_structured(response.text, output_schema)
+    record.update(
+        output_parsed=parsed.model_dump(mode="json"), json_valid_first_try=True, repaired=False
+    )
+    _write_success(
+        spec=spec,
+        record=record,
+        response=response,
+        latency_ms=latency_ms,
+        runs_dir=runs_dir,
+        on_record=on_record,
+    )
+    return parsed

@@ -7,6 +7,7 @@ import pytest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.outputs import ChatResult
+from pydantic import ValidationError
 
 import mia.llm as llm
 from mia.llm import (
@@ -16,10 +17,12 @@ from mia.llm import (
     estimate_cost,
     hash_input,
     invoke,
+    invoke_structured,
     load_models_config,
+    parse_structured,
     resolve_model,
 )
-from mia.schemas import RunRecord
+from mia.schemas import AnswerScore, RunRecord
 
 FIXTURE_MODELS = Path(__file__).parent / "fixtures" / "models.yaml"
 SRC_DIR = Path(__file__).parents[1] / "src" / "mia"
@@ -628,3 +631,74 @@ def test_invoke_without_retries_calls_model_once(cfg: ModelsConfig, tmp_path: Pa
     assert model.calls == 1
     (record,) = _read_records(_today_file(tmp_path, "test"))
     assert record.error == "RuntimeError: boom"
+
+
+# --- parse_structured + invoke_structured (R1, R5, R6) -------------------------
+
+VALID_SCORE = '{"score": 4, "criteria_met": ["a"], "evidence_quotes": ["x"], "justification": "ok"}'
+
+
+def test_parse_structured_returns_instance() -> None:
+    assert parse_structured(VALID_SCORE, AnswerScore).score == 4
+
+
+@pytest.mark.parametrize("opening", ["```json\n", "```\n"])
+def test_parse_structured_strips_markdown_fences(opening: str) -> None:
+    assert parse_structured(f"{opening}{VALID_SCORE}\n```", AnswerScore).score == 4
+
+
+def test_parse_structured_broken_json_raises_value_error() -> None:
+    with pytest.raises(ValueError):
+        parse_structured('{"score": 4,', AnswerScore)
+
+
+def test_parse_structured_wrong_schema_raises_validation_error() -> None:
+    with pytest.raises(ValidationError):
+        parse_structured('{"score": 4}', AnswerScore)
+
+
+def _invoke_structured(cfg: ModelsConfig, runs_dir: Path, chat_model: Any) -> AnswerScore:
+    return invoke_structured(
+        output_schema=AnswerScore,
+        prompt_name="judge",
+        prompt_version=1,
+        system="s",
+        user="u",
+        input={"q": "u"},
+        experiment="test",
+        config=cfg,
+        runs_dir=runs_dir,
+        chat_model=chat_model,
+    )
+
+
+def test_invoke_structured_valid_first_try_records_parsed_output(
+    cfg: ModelsConfig, tmp_path: Path
+) -> None:
+    result = _invoke_structured(cfg, tmp_path, _fake_model(_reply(VALID_SCORE)))
+
+    assert isinstance(result, AnswerScore)
+    (record,) = _read_records(_today_file(tmp_path, "test"))
+    assert record.json_valid_first_try is True
+    assert record.repaired is False
+    assert record.output_parsed == result.model_dump(mode="json")
+    assert record.output_raw == VALID_SCORE
+    assert record.error is None
+
+
+def test_invoke_structured_provider_error_is_recorded_and_reraised(
+    cfg: ModelsConfig, tmp_path: Path
+) -> None:
+    with pytest.raises(RuntimeError, match="boom"):
+        _invoke_structured(cfg, tmp_path, _FailingChatModel(messages=iter([])))
+
+    (record,) = _read_records(_today_file(tmp_path, "test"))
+    assert record.error == "RuntimeError: boom"
+    assert record.json_valid_first_try is None
+
+
+def test_plain_invoke_keeps_structured_flags_none(cfg: ModelsConfig, tmp_path: Path) -> None:
+    _invoke(cfg, tmp_path, _fake_model(_reply("texto")))
+
+    (record,) = _read_records(_today_file(tmp_path, "test"))
+    assert (record.json_valid_first_try, record.repaired) == (None, None)
