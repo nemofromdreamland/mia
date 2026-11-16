@@ -1,0 +1,180 @@
+# Golden set A (task 2.1): 10 perguntas autocontidas, 2 por caso de cases/.
+# Formato = Question de src/mia/schemas.py. targets_concern sempre null.
+questions:
+  # ---- prompt-engineer-jr (Nexa Consultoria) ----
+  - id: gq-tech-01
+    phase: technical
+    competency: Avaliação de prompts com conjuntos de teste
+    text: >-
+      Você precisa comparar duas versões de um prompt para um cliente real, e o
+      cliente quer saber qual é a melhor. Como você faria essa comparação para
+      que ele confiasse no resultado?
+    purpose: Verificar se a pessoa avalia prompts de forma sistemática, e não só lendo algumas respostas.
+    look_for:
+      - Propõe um conjunto de casos de teste fixo, usado nas duas versões
+      - Define critérios ou métricas de qualidade antes de comparar
+      - Muda uma coisa por vez, ou garante que a comparação é justa
+      - Apresenta o resultado ao cliente com números e exemplos concretos
+    follow_ups:
+      - Quantos casos de teste você usaria e como os escolheria?
+      - E se as duas versões empatassem nos números?
+    targets_concern: null
+
+  - id: gq-tech-02
+    phase: technical
+    competency: Resolução de problemas em fluxos de RAG
+    text: >-
+      Você montou um assistente que responde perguntas com base em documentos
+      (RAG) e dividiu os textos em trechos de 500 caracteres. As respostas às
+      vezes saem incompletas. O que você investigaria e como decidiria o
+      tamanho dos trechos?
+    purpose: Avaliar raciocínio prático sobre divisão de textos e diagnóstico de falhas em RAG.
+    look_for:
+      - Relaciona trechos pequenos demais a perda de contexto (e grandes demais a ruído)
+      - Propõe testar tamanhos diferentes e comparar os resultados
+      - Verifica se o trecho certo foi recuperado antes de culpar o modelo
+      - Cita sobreposição entre trechos ou outro ajuste concreto
+    follow_ups:
+      - Como você saberia que a mudança melhorou de fato?
+    targets_concern: null
+
+  # ---- data-analyst-pleno (Lumo) ----
+  - id: gq-tech-03
+    phase: technical
+    competency: Desenho de testes A/B com rigor estatístico
+    text: >-
+      O time de produto quer testar uma mudança na tela de pagamento de um
+      e-commerce e pede que você desenhe o teste A/B do zero. O que você
+      precisa definir antes de rodá-lo?
+    purpose: Verificar se a pessoa conhece os passos que tornam um teste A/B confiável antes de ele começar.
+    look_for:
+      - Define uma métrica principal e uma hipótese clara
+      - Calcula ou discute tamanho de amostra e duração do teste
+      - Garante divisão aleatória dos grupos
+      - Menciona nível de significância ou o risco de encerrar o teste cedo demais
+    follow_ups:
+      - O que você faria se o resultado não fosse significativo?
+      - Que métricas de segurança você acompanharia ao mesmo tempo?
+    targets_concern: null
+
+  - id: gq-tech-04
+    phase: technical
+    competency: Métricas de produto (conversão e retenção)
+    text: >-
+      Qual é a diferença entre acompanhar uma métrica de conversão simples e
+      uma métrica de retenção? Por que a segunda costuma ser mais difícil de
+      calcular e interpretar?
+    purpose: Avaliar domínio conceitual de métricas de produto e noção de coorte.
+    look_for:
+      - Explica que a retenção depende do tempo e de uma janela ou coorte
+      - Define com clareza o que conta como pessoa ativa ou que retornou
+      - Cita um problema real, como coortes incompletas ou sazonalidade
+      - Dá um exemplo concreto de cada métrica
+    follow_ups:
+      - Como você apresentaria uma curva de retenção a quem não é da área de dados?
+    targets_concern: null
+
+  # ---- ai-product-manager (Atlas) ----
+  - id: gq-tech-05
+    phase: technical
+    competency: Avaliação de qualidade de modelos de linguagem
+    text: >-
+      Sua empresa vai lançar um resumo automático de contratos feito por um
+      modelo de linguagem. Como você decide se o modelo está bom o suficiente
+      para ir para produção? O que você observa?
+    purpose: Verificar se a pessoa sabe definir critérios de qualidade e risco antes de lançar um recurso de IA.
+    look_for:
+      - Define critérios de qualidade antes do lançamento (precisão, omissões, invenções)
+      - Usa um conjunto de exemplos reais revisados por especialistas
+      - Considera o custo de errar neste caso de uso e define um limite aceitável
+      - Prevê acompanhamento depois do lançamento
+    follow_ups:
+      - Quem deveria revisar as respostas do modelo?
+      - O que você faria se a qualidade caísse depois do lançamento?
+    targets_concern: null
+
+  - id: gq-beh-01
+    phase: behavioral
+    competency: Negociação de trade-offs com áreas de controle
+    text: >-
+      Conte de uma vez em que a área jurídica ou outra área de controle pediu
+      para não lançar algo que você considerava importante. Como você lidou
+      com isso?
+    purpose: Avaliar como a pessoa negocia trade-offs com áreas de controle sem perder a parceria.
+    look_for:
+      - Descreve uma situação específica, com contexto e papel próprio
+      - Entende e reconhece a preocupação da outra área
+      - Propõe uma alternativa ou um acordo concreto
+      - Conta o resultado e o que aprendeu
+    follow_ups:
+      - O que você faria diferente hoje?
+    targets_concern: null
+
+  # ---- backend-python-jr (Cofre) ----
+  - id: gq-tech-06
+    phase: technical
+    competency: Testes e qualidade de código
+    text: >-
+      Você escreveu uma API em Python que registra entregas e agora vai
+      escrever testes automatizados para ela. Como você decide o que testar
+      primeiro e o que fica para depois?
+    purpose: Avaliar critério de priorização de testes em quem está começando.
+    look_for:
+      - Prioriza regras de negócio e caminhos mais importantes ou arriscados
+      - Cobre casos de erro e entradas inválidas, além do caminho feliz
+      - Distingue testar uma função isolada de testar a API completa
+      - Explica o que o teste protege contra (por exemplo, quebrar algo ao mudar o código)
+    follow_ups:
+      - Como você testaria algo que depende de um banco de dados?
+    targets_concern: null
+
+  - id: gq-beh-02
+    phase: behavioral
+    competency: Receber feedback técnico
+    text: >-
+      Conte de uma vez em que uma pessoa mais experiente fez uma crítica ao seu
+      código. Como você reagiu e o que mudou depois?
+    purpose: Avaliar abertura a feedback e capacidade de aprender com ele.
+    look_for:
+      - Descreve uma situação específica, e não uma resposta genérica
+      - Reage com curiosidade, perguntando ou buscando entender o motivo
+      - Aplica o feedback de forma concreta no código ou no jeito de trabalhar
+      - Evita culpar a outra pessoa ou se defender sem ouvir
+    follow_ups:
+      - E se você discordasse da crítica?
+    targets_concern: null
+
+  # ---- software-intern (Trilha) ----
+  - id: gq-beh-03
+    phase: behavioral
+    competency: Pedir ajuda quando necessário
+    text: >-
+      Você está há mais de uma hora preso em uma tarefa de programação sem
+      conseguir avançar. O que você faz, e como pediria ajuda para a pessoa
+      que está te orientando?
+    purpose: Avaliar autonomia equilibrada com a disposição de pedir ajuda no momento certo.
+    look_for:
+      - Tenta resolver por conta própria antes (busca, depuração, leitura do erro)
+      - Define um limite de tempo razoável para pedir ajuda
+      - Apresenta bem o problema (o que tentou, o que esperava, o erro)
+      - Vê o pedido de ajuda como parte do aprendizado
+    follow_ups:
+      - E se a pessoa estivesse muito ocupada?
+    targets_concern: null
+
+  - id: gq-beh-04
+    phase: behavioral
+    competency: Trabalho em equipe e colaboração
+    text: >-
+      Conte de uma vez em que você ajudou um colega a entender algo difícil,
+      na faculdade, em um curso ou em um projeto. Qual foi a maior dificuldade
+      e como você a resolveu?
+    purpose: Avaliar empatia, comunicação e capacidade de explicar algo a outra pessoa.
+    look_for:
+      - Descreve uma situação específica, com contexto claro
+      - Adapta a explicação ao nível da outra pessoa
+      - Mostra paciência ou lida bem com um desacordo
+      - Reflete sobre o que aprendeu com a experiência
+    follow_ups:
+      - Como você soube que a pessoa tinha entendido?
+    targets_concern: null
