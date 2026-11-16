@@ -9,6 +9,8 @@ Spends 2 model calls. Exit codes: 0 weak <= 2 and strong >= 4 with justification
 
 import sys
 
+from pydantic import ValidationError
+
 from mia.judge import judge_answer
 from mia.llm import LLMInvalidOutputError, ModelConfigError
 from mia.schemas import AnswerScore, Question
@@ -49,6 +51,9 @@ def main() -> int:
     try:
         weak = run_case("Resposta fraca", WEAK_ANSWER)
         strong = run_case("Resposta forte", STRONG_ANSWER)
+    except ValidationError:
+        print("Falha na chamada ao modelo: configuração inválida.", file=sys.stderr)
+        return 2
     except (LLMInvalidOutputError, ModelConfigError) as exc:
         print(f"Falha na chamada ao modelo: {exc}", file=sys.stderr)
         return 2
