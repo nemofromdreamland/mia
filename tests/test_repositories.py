@@ -1,7 +1,12 @@
+from collections.abc import Iterator
 from datetime import UTC, datetime
 
+import boto3
 import pytest
+from dynamo_tables import create_tables
+from moto import mock_aws
 
+from mia.repo_dynamo import DynamoSessionRepository
 from mia.repositories import (
     CandidateCounter,
     InMemoryCandidateCounter,
@@ -42,17 +47,37 @@ def make_turn(turn_no: int, text: str = "Pergunta", session_id: str = "01SESSION
 
 
 @pytest.fixture
-def repo() -> InMemorySessionRepository:
+def memory_repo() -> InMemorySessionRepository:
     repository = InMemorySessionRepository(clock=lambda: T1)
     repository.create_session(make_session())
     return repository
 
 
-def test_in_memory_repository_follows_protocol(repo: InMemorySessionRepository) -> None:
-    assert isinstance(repo, SessionRepository)
+@pytest.fixture(params=["memory", "dynamo"])
+def repo(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[SessionRepository]:
+    """Contract fixture: the same tests run against both implementations."""
+    if request.param == "memory":
+        repository: SessionRepository = InMemorySessionRepository(clock=lambda: T1)
+        repository.create_session(make_session())
+        yield repository
+        return
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    with mock_aws():
+        sessions, turns = create_tables(boto3.resource("dynamodb", region_name="us-east-1"))
+        repository = DynamoSessionRepository(sessions, turns, clock=lambda: T1)
+        repository.create_session(make_session())
+        yield repository
 
 
-def test_create_and_get_returns_equal_copy(repo: InMemorySessionRepository) -> None:
+def test_in_memory_repository_follows_protocol(memory_repo: InMemorySessionRepository) -> None:
+    assert isinstance(memory_repo, SessionRepository)
+
+
+def test_create_and_get_returns_equal_copy(repo: SessionRepository) -> None:
     got = repo.get_session("local", "01SESSION")
     assert got == make_session()
     got.status = "failed"
@@ -67,23 +92,23 @@ def test_create_stores_a_copy() -> None:
     assert repository.get_session("local", "01SESSION").status == "preparing"
 
 
-def test_other_visitor_cannot_see_session(repo: InMemorySessionRepository) -> None:
+def test_other_visitor_cannot_see_session(repo: SessionRepository) -> None:
     with pytest.raises(SessionNotFoundError):
         repo.get_session("outro", "01SESSION")
 
 
-def test_unknown_session_raises_not_found(repo: InMemorySessionRepository) -> None:
+def test_unknown_session_raises_not_found(repo: SessionRepository) -> None:
     with pytest.raises(SessionNotFoundError):
         repo.get_session("local", "NOPE")
 
 
-def test_duplicate_session_id_raises_conflict(repo: InMemorySessionRepository) -> None:
+def test_duplicate_session_id_raises_conflict(repo: SessionRepository) -> None:
     with pytest.raises(SessionConflictError):
         repo.create_session(make_session())
 
 
 def test_update_with_wrong_expected_status_changes_nothing(
-    repo: InMemorySessionRepository,
+    repo: SessionRepository,
 ) -> None:
     with pytest.raises(SessionConflictError):
         repo.update_session(
@@ -92,7 +117,7 @@ def test_update_with_wrong_expected_status_changes_nothing(
     assert repo.get_session("local", "01SESSION") == make_session()
 
 
-def test_update_applies_changes_and_updated_at(repo: InMemorySessionRepository) -> None:
+def test_update_applies_changes_and_updated_at(repo: SessionRepository) -> None:
     updated = repo.update_session(
         "local",
         "01SESSION",
@@ -105,12 +130,12 @@ def test_update_applies_changes_and_updated_at(repo: InMemorySessionRepository) 
     assert repo.get_session("local", "01SESSION") == updated
 
 
-def test_update_other_visitor_raises_not_found(repo: InMemorySessionRepository) -> None:
+def test_update_other_visitor_raises_not_found(repo: SessionRepository) -> None:
     with pytest.raises(SessionNotFoundError):
         repo.update_session("outro", "01SESSION", expected_status="preparing", changes={})
 
 
-def test_update_rejects_invalid_value(repo: InMemorySessionRepository) -> None:
+def test_update_rejects_invalid_value(repo: SessionRepository) -> None:
     with pytest.raises(ValueError):
         repo.update_session(
             "local", "01SESSION", expected_status="preparing", changes={"status": "zzz"}
@@ -118,34 +143,34 @@ def test_update_rejects_invalid_value(repo: InMemorySessionRepository) -> None:
     assert repo.get_session("local", "01SESSION").status == "preparing"
 
 
-def test_update_rejects_key_fields(repo: InMemorySessionRepository) -> None:
+def test_update_rejects_key_fields(repo: SessionRepository) -> None:
     with pytest.raises(ValueError):
         repo.update_session(
             "local", "01SESSION", expected_status="preparing", changes={"visitor_id": "x"}
         )
 
 
-def test_turns_listed_in_order_and_upserted(repo: InMemorySessionRepository) -> None:
+def test_turns_listed_in_order_and_upserted(memory_repo: InMemorySessionRepository) -> None:
     for no in (3, 1, 2):
-        repo.put_turn("local", make_turn(no))
-    repo.put_turn("local", make_turn(2, "Nova"))
-    turns = repo.list_turns("local", "01SESSION")
+        memory_repo.put_turn("local", make_turn(no))
+    memory_repo.put_turn("local", make_turn(2, "Nova"))
+    turns = memory_repo.list_turns("local", "01SESSION")
     assert [t.turn_no for t in turns] == [1, 2, 3]
     assert turns[1].interviewer_text == "Nova"
 
 
-def test_list_turns_empty(repo: InMemorySessionRepository) -> None:
-    assert repo.list_turns("local", "01SESSION") == []
+def test_list_turns_empty(memory_repo: InMemorySessionRepository) -> None:
+    assert memory_repo.list_turns("local", "01SESSION") == []
 
 
-def test_put_turn_other_visitor_raises_not_found(repo: InMemorySessionRepository) -> None:
+def test_put_turn_other_visitor_raises_not_found(memory_repo: InMemorySessionRepository) -> None:
     with pytest.raises(SessionNotFoundError):
-        repo.put_turn("outro", make_turn(1))
+        memory_repo.put_turn("outro", make_turn(1))
 
 
-def test_list_turns_other_visitor_raises_not_found(repo: InMemorySessionRepository) -> None:
+def test_list_turns_other_visitor_raises_not_found(memory_repo: InMemorySessionRepository) -> None:
     with pytest.raises(SessionNotFoundError):
-        repo.list_turns("outro", "01SESSION")
+        memory_repo.list_turns("outro", "01SESSION")
 
 
 def _completed(
@@ -167,28 +192,28 @@ def test_list_sessions_only_from_visitor_newest_first() -> None:
     assert repo.list_sessions("nobody") == []
 
 
-def test_list_completed_filters_status_and_case(repo: InMemorySessionRepository) -> None:
-    repo.create_session(_completed("01A1", "case_a", "a"))
-    repo.create_session(_completed("01B1", "case_b", "b"))
-    repo.create_session(make_session("01OPEN", "a"))
-    assert {s.session_id for s in repo.list_completed()} == {"01A1", "01B1"}
-    assert [s.session_id for s in repo.list_completed("case_a")] == ["01A1"]
+def test_list_completed_filters_status_and_case(memory_repo: InMemorySessionRepository) -> None:
+    memory_repo.create_session(_completed("01A1", "case_a", "a"))
+    memory_repo.create_session(_completed("01B1", "case_b", "b"))
+    memory_repo.create_session(make_session("01OPEN", "a"))
+    assert {s.session_id for s in memory_repo.list_completed()} == {"01A1", "01B1"}
+    assert [s.session_id for s in memory_repo.list_completed("case_a")] == ["01A1"]
 
 
-def test_delete_session_removes_session_and_turns(repo: InMemorySessionRepository) -> None:
-    repo.put_turn("local", make_turn(1))
-    repo.delete_session("local", "01SESSION")
+def test_delete_session_removes_session_and_turns(memory_repo: InMemorySessionRepository) -> None:
+    memory_repo.put_turn("local", make_turn(1))
+    memory_repo.delete_session("local", "01SESSION")
     with pytest.raises(SessionNotFoundError):
-        repo.get_session("local", "01SESSION")
+        memory_repo.get_session("local", "01SESSION")
     with pytest.raises(SessionNotFoundError):
-        repo.list_turns("local", "01SESSION")
-    assert repo.list_sessions("local") == []
+        memory_repo.list_turns("local", "01SESSION")
+    assert memory_repo.list_sessions("local") == []
 
 
-def test_delete_other_visitor_raises_not_found(repo: InMemorySessionRepository) -> None:
+def test_delete_other_visitor_raises_not_found(memory_repo: InMemorySessionRepository) -> None:
     with pytest.raises(SessionNotFoundError):
-        repo.delete_session("intruder", "01SESSION")
-    assert repo.get_session("local", "01SESSION").session_id == "01SESSION"
+        memory_repo.delete_session("intruder", "01SESSION")
+    assert memory_repo.get_session("local", "01SESSION").session_id == "01SESSION"
 
 
 def _report() -> tuple[Report, CandidateSummary]:

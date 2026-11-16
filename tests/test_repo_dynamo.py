@@ -1,7 +1,12 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from mia.repo_dynamo import item_to_session, item_to_turn, session_to_item, turn_to_item
+from mia.repo_dynamo import (
+    item_to_session,
+    item_to_turn,
+    session_to_item,
+    turn_to_item,
+)
 from mia.schemas import AnswerScore, Session, ToolDecision, Turn
 
 T0 = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
