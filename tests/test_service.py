@@ -9,17 +9,15 @@ from fakes_service import (
     VISITOR_A,
     VISITOR_B,
     Calls,
+    complete_with_score,
+    fake_report_result,
     make_deps,
 )
 
-from mia.report_graph import ReportError, ReportResult
+from mia.report_graph import ReportError
 from mia.schemas import (
     AnswerScore,
-    CandidateSummary,
-    CompetencyScore,
-    Report,
     Session,
-    SummaryPoint,
     ToolDecision,
     Turn,
 )
@@ -350,25 +348,6 @@ def test_start_and_send_other_visitor_is_not_found() -> None:
         assert exc.value.code == "not_found"
 
 
-def fake_report_result(plan, turns) -> ReportResult:
-    report = Report(
-        overall_score=4.0,
-        competencies=[CompetencyScore(competency="comunicação", score=4.0, summary="ok")],
-        strengths=["claro"],
-        improvements=[],
-    )
-    point = SummaryPoint(point="ok", answer_quote="resposta")
-    summary = CandidateSummary(
-        headline="Boa entrevista",
-        summary="Resumo.",
-        strengths=[point],
-        concerns=[point],
-        suggested_next_step="advance",
-        next_step_reason="ok",
-    )
-    return ReportResult(report=report, summary=summary, turns=turns)
-
-
 def with_report(deps: ServiceDeps, report=fake_report_result) -> tuple[ServiceDeps, Calls]:
     calls = Calls()
 
@@ -483,28 +462,6 @@ def test_get_report_other_visitor_is_not_found() -> None:
         get_report(deps, VISITOR_B, session.session_id)
 
     assert exc.value.code == "not_found"
-
-
-def complete_with_score(
-    deps: ServiceDeps, visitor: str, score: float, case_id: str = CASE_ID
-) -> str:
-    """Create a session and mark it completed with a stored report (no model call)."""
-    session = create_session(deps, visitor, case_id, "text")
-    result = fake_report_result(None, [])
-    report = result.report.model_copy(update={"overall_score": score})
-    deps.reports.save(session.session_id, report, result.summary)
-    deps.repo.update_session(
-        visitor,
-        session.session_id,
-        expected_status="ready",
-        changes={
-            "status": "completed",
-            "overall_score": score,
-            "headline": f"nota {score}",
-            "ended_at": T0 + timedelta(minutes=int(score * 10)),
-        },
-    )
-    return session.session_id
 
 
 def test_recruiter_under_three_sessions_shows_all_without_average() -> None:
