@@ -461,7 +461,7 @@ def test_should_follow_up_passes_remaining_follow_ups_and_history(
     state = started(plan).model_copy(update={"follow_ups_used": 1})
     should_follow_up(
         plan.questions[0],
-        "Resposta.",
+        "Resposta de [EMAIL].",
         state,
         TimeStatus(over=False, minutes_left=5),
         chat_model=_fake(reply),
@@ -469,8 +469,12 @@ def test_should_follow_up_passes_remaining_follow_ups_and_history(
     )
     sent = json.dumps(_records(tmp_path)[0]["input"], ensure_ascii=False)
     assert plan.questions[0].look_for[0] in sent
+    assert plan.questions[0].text in sent
     assert state.turns[0].interviewer_text in sent
     assert '"follow_ups_left": "1"' in sent
+    assert '"minutes_left": "5.0"' in sent
+    assert "[EMAIL]" in sent
+    assert "ana@exemplo.com" not in sent
 
 
 def test_default_writer_returns_speech_and_logs_run(plan: InterviewPlan, tmp_path: Path) -> None:
