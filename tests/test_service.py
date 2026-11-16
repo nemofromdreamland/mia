@@ -27,9 +27,11 @@ from mia.service import (
     create_session,
     delete_session,
     end_interview,
+    get_recruiter_candidate,
     get_report,
     get_session,
     list_cases,
+    list_recruiter_candidates,
     list_sessions,
     send_answer,
     start_interview,
@@ -537,3 +539,121 @@ def test_get_report_other_visitor_is_not_found() -> None:
         get_report(deps, VISITOR_B, session.session_id)
 
     assert exc.value.code == "not_found"
+
+
+def complete_with_score(
+    deps: ServiceDeps, visitor: str, score: float, case_id: str = CASE_ID
+) -> str:
+    """Create a session and mark it completed with a stored report (no model call)."""
+    session = create_session(deps, visitor, case_id, "text")
+    result = fake_report_result(None, [])
+    report = result.report.model_copy(update={"overall_score": score})
+    deps.reports.save(session.session_id, report, result.summary)
+    deps.repo.update_session(
+        visitor,
+        session.session_id,
+        expected_status="ready",
+        changes={
+            "status": "completed",
+            "overall_score": score,
+            "headline": f"nota {score}",
+            "ended_at": T0 + timedelta(minutes=int(score * 10)),
+        },
+    )
+    return session.session_id
+
+
+def test_recruiter_under_three_sessions_shows_all_without_average() -> None:
+    deps = make_deps()
+    ids = {complete_with_score(deps, VISITOR_A, 2.0), complete_with_score(deps, VISITOR_B, 4.0)}
+
+    result = list_recruiter_candidates(deps, CASE_ID)
+
+    assert [s.case_id for s in result.stats] == [CASE_ID]
+    assert result.stats[0].completed_sessions == 2
+    assert result.stats[0].average_score is None
+    assert {c.session_id for c in result.candidates} == ids
+    assert all(c.delta_vs_case_avg is None for c in result.candidates)
+
+
+def test_recruiter_with_average_shows_only_above_average() -> None:
+    deps = make_deps()
+    complete_with_score(deps, VISITOR_A, 2.0)
+    complete_with_score(deps, VISITOR_A, 3.0)
+    top = complete_with_score(deps, VISITOR_B, 4.0)
+
+    result = list_recruiter_candidates(deps)
+
+    stats = {s.case_id: s for s in result.stats}
+    assert len(stats) == 5  # one per case, even without sessions
+    assert stats[CASE_ID].average_score == 3.0
+    assert [c.session_id for c in result.candidates] == [top]
+    assert result.candidates[0].delta_vs_case_avg == 1.0
+    assert result.candidates[0].candidate_no == 3
+
+
+def test_recruiter_orders_by_delta_then_most_recent() -> None:
+    deps = make_deps()
+    for score in (1.0, 1.0, 1.0):
+        complete_with_score(deps, VISITOR_A, score)
+    best = complete_with_score(deps, VISITOR_B, 5.0)
+    mid = complete_with_score(deps, VISITOR_B, 3.0)
+
+    result = list_recruiter_candidates(deps, CASE_ID)
+
+    assert [c.session_id for c in result.candidates] == [best, mid]
+
+
+def test_recruiter_responses_never_expose_visitor_id() -> None:
+    deps = make_deps()
+    session_id = complete_with_score(deps, VISITOR_A, 4.0)
+
+    listing = list_recruiter_candidates(deps).model_dump_json()
+    detail = get_recruiter_candidate(deps, session_id).model_dump_json()
+
+    for payload in (listing, detail):
+        assert "visitor_id" not in payload
+        assert VISITOR_A not in payload
+
+
+def test_recruiter_detail_returns_row_summary_report_and_turns() -> None:
+    deps = make_deps()
+    session_id = complete_with_score(deps, VISITOR_A, 4.0)
+
+    detail = get_recruiter_candidate(deps, session_id)
+
+    assert detail.row.session_id == session_id
+    assert detail.row.headline == "nota 4.0"
+    assert detail.summary.headline == "Boa entrevista"
+    assert detail.report.overall_score == 4.0
+    assert detail.turns == []
+
+
+def test_recruiter_detail_not_completed_or_missing_is_not_found() -> None:
+    deps = make_deps()
+    session = create_session(deps, VISITOR_A, CASE_ID, "text")
+
+    for session_id in (session.session_id, "nope"):
+        with pytest.raises(ServiceError) as exc:
+            get_recruiter_candidate(deps, session_id)
+        assert exc.value.code == "not_found"
+
+
+def test_recruiter_hides_deleted_session() -> None:
+    deps = make_deps()
+    session_id = complete_with_score(deps, VISITOR_A, 4.0)
+    delete_session(deps, VISITOR_A, session_id)
+
+    assert list_recruiter_candidates(deps).candidates == []
+    with pytest.raises(ServiceError):
+        get_recruiter_candidate(deps, session_id)
+
+
+def test_get_report_is_above_case_avg_with_three_sessions() -> None:
+    deps = make_deps()
+    complete_with_score(deps, VISITOR_A, 2.0)
+    low = complete_with_score(deps, VISITOR_A, 3.0)
+    high = complete_with_score(deps, VISITOR_B, 4.0)
+
+    assert get_report(deps, VISITOR_B, high).is_above_case_avg is True
+    assert get_report(deps, VISITOR_A, low).is_above_case_avg is False
