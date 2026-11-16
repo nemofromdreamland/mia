@@ -1,0 +1,218 @@
+{
+ "results": {
+  "results": [
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "model-a"
+    },
+    "response": {
+     "output": "{\"score\": 5, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "q1-level_5",
+      "variant": "level_5",
+      "split": "dev",
+      "human_score": 5
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "q1-level_5",
+       "variant": "level_5",
+       "split": "dev",
+       "human_score": 5,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "model-a"
+    },
+    "response": {
+     "output": "{\"score\": 4, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": false}",
+     "metadata": {
+      "item_id": "q1-level_3",
+      "variant": "level_3",
+      "split": "test",
+      "human_score": 3
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "q1-level_3",
+       "variant": "level_3",
+       "split": "test",
+       "human_score": 3,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": false
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "model-a"
+    },
+    "response": {
+     "output": "{\"score\": 4, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "q1-rambling",
+      "variant": "rambling",
+      "split": "test",
+      "human_score": 2
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "q1-rambling",
+       "variant": "rambling",
+       "split": "test",
+       "human_score": 2,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "model-a"
+    },
+    "response": {
+     "output": "{\"score\": 5, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "q1-para",
+      "variant": "paraphrase",
+      "split": "test",
+      "human_score": 5
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "q1-para",
+       "variant": "paraphrase",
+       "split": "test",
+       "human_score": 5,
+       "paraphrase_of": "q1-level_5"
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "model-b"
+    },
+    "response": {
+     "output": "{\"score\": 4, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "q1-level_5",
+      "variant": "level_5",
+      "split": "dev",
+      "human_score": 5
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "q1-level_5",
+       "variant": "level_5",
+       "split": "dev",
+       "human_score": 5,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "model-b"
+    },
+    "response": {
+     "output": "{\"error\": \"ThrottlingException: slow down\"}",
+     "metadata": {}
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "q1-level_3",
+       "variant": "level_3",
+       "split": "test",
+       "human_score": 3,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": false
+      }
+     ]
+    },
+    "error": "ThrottlingException: slow down"
+   }
+  ]
+ }
+}
