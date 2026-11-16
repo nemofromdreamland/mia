@@ -1,0 +1,22 @@
+{
+  "job_title": "Analista de Dados Júnior",
+  "fit_score": 72,
+  "strengths": [
+    {
+      "point": "Automatizou um relatório recorrente com Python.",
+      "cv_quote": "Criei um painel de vendas em Python que reduziu o fechamento mensal de 3 dias para 1."
+    },
+    {
+      "point": "Tem experiência prática com RAG.",
+      "cv_quote": "Chatbot de FAQ com RAG para a biblioteca da faculdade"
+    }
+  ],
+  "concerns": [
+    {
+      "point": "Pouca experiência profissional além do estágio.",
+      "cv_quote": "Estagiária de dados na Lumen Varejo Fictício (2024–2025)."
+    }
+  ],
+  "missing_keywords": ["SQL", "Power BI"],
+  "competencies": ["Python", "RAG", "Comunicação de resultados"]
+}

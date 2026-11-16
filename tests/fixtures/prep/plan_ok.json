@@ -1,0 +1,47 @@
+{
+  "persona": "technical",
+  "language": "pt-BR",
+  "estimated_minutes": 20,
+  "questions": [
+    {
+      "id": "q1",
+      "phase": "opening",
+      "competency": "Comunicação de resultados",
+      "text": "Conte sobre você e o que a trouxe até esta vaga.",
+      "purpose": "Aquecer e entender a motivação.",
+      "look_for": ["Clareza", "Motivação", "Relação com a vaga"],
+      "follow_ups": [],
+      "targets_concern": null
+    },
+    {
+      "id": "q2",
+      "phase": "projects",
+      "competency": "Python",
+      "text": "Como você construiu o painel de vendas e que decisões técnicas tomou?",
+      "purpose": "Checar a profundidade técnica em Python.",
+      "look_for": ["Bibliotecas usadas", "Trade-offs", "Resultado medido"],
+      "follow_ups": ["Como você validou os números?"],
+      "targets_concern": null
+    },
+    {
+      "id": "q3",
+      "phase": "technical",
+      "competency": "RAG",
+      "text": "Como você avaliou o chatbot de FAQ com RAG?",
+      "purpose": "Checar noção de avaliação de sistemas com LLM.",
+      "look_for": ["Conjunto de teste", "Métricas", "Limitações"],
+      "follow_ups": [],
+      "targets_concern": null
+    },
+    {
+      "id": "q4",
+      "phase": "behavioral",
+      "competency": "Comunicação de resultados",
+      "text": "Como foi trabalhar sozinha em um estágio com pouca supervisão?",
+      "purpose": "Explorar a lacuna de experiência profissional.",
+      "look_for": ["Autonomia", "Pedir ajuda", "Aprendizado"],
+      "follow_ups": [],
+      "targets_concern": "Pouca experiência profissional além do estágio."
+    }
+  ]
+}
