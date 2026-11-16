@@ -209,6 +209,7 @@ def test_feliz_completo_with_pdf(tmp_path: Path) -> None:
     assert result.plan.persona == "technical"
     records = _records(tmp_path)
     assert [r["prompt_name"] for r in records] == ["screening", "planner"]
+    assert [r["prompt_version"] for r in records] == [2, 2]
     assert {r["session_id"] for r in records} == {"s1"}
 
 
