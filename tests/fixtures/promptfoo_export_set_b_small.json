@@ -1,0 +1,164 @@
+{
+ "results": {
+  "results": [
+   {
+    "provider": {
+     "id": "file://providers/follow_up_provider.py",
+     "label": "model-a"
+    },
+    "response": {
+     "output": "{\"action\": \"follow_up\", \"follow_up_text\": \"Qual foi a m\\u00e9trica?\", \"reason\": \"r\"}"
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "b1",
+       "split": "dev",
+       "follow_ups_left": 2,
+       "expected": {
+        "action": "follow_up"
+       }
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/tool_asserts.py:assert_tool_args"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/follow_up_provider.py",
+     "label": "model-a"
+    },
+    "response": {
+     "output": "{\"action\": \"next_question\", \"follow_up_text\": null, \"reason\": \"r\"}"
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "b2",
+       "split": "test",
+       "follow_ups_left": 1,
+       "expected": {
+        "action": "next_question"
+       }
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": []
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/follow_up_provider.py",
+     "label": "model-a"
+    },
+    "response": {
+     "output": "{\"action\": \"next_question\", \"follow_up_text\": null, \"reason\": \"r\"}"
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "b3",
+       "split": "test",
+       "follow_ups_left": 1,
+       "expected": {
+        "action": "end"
+       }
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": []
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/follow_up_provider.py",
+     "label": "model-b"
+    },
+    "response": {
+     "output": "{\"action\": \"follow_up\", \"follow_up_text\": \"Qual foi a m\\u00e9trica?\", \"reason\": \"r\"}"
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "b1",
+       "split": "dev",
+       "follow_ups_left": 2,
+       "expected": {
+        "action": "follow_up"
+       }
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/tool_asserts.py:assert_tool_args"
+       },
+       "pass": false
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/follow_up_provider.py",
+     "label": "model-b"
+    },
+    "response": {
+     "output": "{\"action\": \"follow_up\", \"follow_up_text\": \"Qual foi a m\\u00e9trica?\", \"reason\": \"r\"}"
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "b2",
+       "split": "test",
+       "follow_ups_left": 0,
+       "expected": {
+        "action": "next_question"
+       }
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": []
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/follow_up_provider.py",
+     "label": "model-b"
+    },
+    "response": {
+     "error": "RuntimeError: x"
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "b3",
+       "split": "test",
+       "follow_ups_left": 1,
+       "expected": {
+        "action": "end"
+       }
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": []
+    }
+   }
+  ]
+ }
+}

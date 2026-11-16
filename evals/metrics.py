@@ -1,4 +1,4 @@
-"""Aggregated metrics for eval set A (judge vs. human), task 2.6.
+"""Aggregated metrics for eval sets A (judge vs. human, task 2.6) and B (tool decisions, 2.7).
 
 Metric functions are pure: they take lists and return numbers (or None when there is
 no data, shown as "n/d" in the report). File reading and the report come later.
@@ -182,8 +182,13 @@ def run_stats(records: Sequence[RunRecord]) -> list[RunStats]:
     return stats
 
 
+def _matches_experiment(recorded: str, wanted: str | None) -> bool:
+    """None = all; else the exact name or a prefix ending at "_" (baseline_v1 -> ..._set_a)."""
+    return wanted is None or recorded == wanted or recorded.startswith(f"{wanted}_")
+
+
 def load_runs(paths: Sequence[Path], experiment: str | None) -> list[RunRecord]:
-    """Read RunRecords from JSONL files, keeping only the given experiment (None = all)."""
+    """Read RunRecords from JSONL files, keeping only the given experiment (exact or prefix)."""
     records: list[RunRecord] = []
     for path in paths:
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -193,7 +198,7 @@ def load_runs(paths: Sequence[Path], experiment: str | None) -> list[RunRecord]:
                 record = RunRecord.model_validate_json(line)
             except ValidationError as exc:
                 raise ValueError(f"{path.name} line {number}: not a RunRecord") from exc
-            if experiment is None or record.experiment == experiment:
+            if _matches_experiment(record.experiment, experiment):
                 records.append(record)
     return records
 
@@ -249,6 +254,110 @@ def load_promptfoo_export(path: Path) -> list[JudgedItem]:
         return [_judged_item(r) for r in results]
     except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as exc:
         raise ValueError(f"{path.name}: not a Promptfoo export") from exc
+
+
+# --- set B: tool decisions ----------------------------------------------------
+
+ACTIONS: tuple[str, ...] = ("follow_up", "next_question", "end")
+ERROR = "erro"
+
+
+@dataclass(frozen=True)
+class ToolItem:
+    """One follow_up decision for one moment, under one provider label (model)."""
+
+    item_id: str
+    label: str
+    split: str | None
+    expected_action: str
+    got_action: str | None  # effective action; None = provider error or output outside the schema
+    args_ok: bool | None  # None = not applicable
+
+
+@dataclass(frozen=True)
+class ToolAccuracy:
+    n: int
+    action_pct: float | None
+    args_pct: float | None
+    args_n: int
+    errors: int
+    confusion: dict[tuple[str, str], int]  # (expected, got | "erro") -> count
+
+
+def tool_accuracy(items: Sequence[ToolItem]) -> ToolAccuracy:
+    """Action accuracy over all items; argument accuracy over items expecting a follow_up."""
+    confusion: dict[tuple[str, str], int] = defaultdict(int)
+    for item in items:
+        confusion[(item.expected_action, item.got_action or ERROR)] += 1
+    with_args = [i for i in items if i.expected_action == "follow_up"]
+    return ToolAccuracy(
+        n=len(items),
+        action_pct=_pct(sum(i.got_action == i.expected_action for i in items), len(items)),
+        args_pct=_pct(sum(i.args_ok is True for i in with_args), len(with_args)),
+        args_n=len(with_args),
+        errors=sum(i.got_action is None for i in items),
+        confusion=dict(confusion),
+    )
+
+
+def _effective_action(data: Any, follow_ups_left: int) -> str | None:
+    """Action the product takes (mirrors interviewer._wants_follow_up); None if invalid."""
+    if not isinstance(data, dict) or data.get("action") not in ACTIONS:
+        return None
+    if data["action"] != "follow_up":
+        return str(data["action"])
+    text = data.get("follow_up_text")
+    has_text = isinstance(text, str) and bool(text.strip())
+    return "follow_up" if has_text and follow_ups_left > 0 else "next_question"
+
+
+def _got_action(result: dict[str, Any], follow_ups_left: int) -> str | None:
+    response = result.get("response") or {}
+    if response.get("error"):
+        return None
+    try:
+        data = json.loads(response.get("output") or "")
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return _effective_action(data, follow_ups_left)
+
+
+def _args_ok(result: dict[str, Any], expected: str, got: str | None) -> bool | None:
+    if expected != "follow_up":
+        return None
+    if got != "follow_up":
+        return False
+    grading = result.get("gradingResult") or {}
+    for component in grading.get("componentResults") or []:
+        value = str((component.get("assertion") or {}).get("value", ""))
+        if value.endswith("assert_tool_args"):
+            return bool(component.get("pass"))
+    return None
+
+
+def _tool_item(result: dict[str, Any]) -> ToolItem:
+    item = (result.get("testCase") or {}).get("vars", {}).get("item") or {}
+    if isinstance(item, str):
+        item = json.loads(item)
+    expected = item["expected"]["action"]
+    got = _got_action(result, item["follow_ups_left"])
+    return ToolItem(
+        item_id=item["item_id"],
+        label=(result.get("provider") or {}).get("label") or "default",
+        split=item.get("split"),
+        expected_action=expected,
+        got_action=got,
+        args_ok=_args_ok(result, expected, got),
+    )
+
+
+def load_tool_export(path: Path) -> list[ToolItem]:
+    """Read the Promptfoo JSON of set B; one ToolItem per result."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return [_tool_item(r) for r in raw["results"]["results"]]
+    except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as exc:
+        raise ValueError(f"{path.name}: not a Promptfoo export of set B") from exc
 
 
 # --- report -----------------------------------------------------------------
@@ -382,11 +491,58 @@ def _cost_section(records: Sequence[RunRecord]) -> list[str]:
     return ["## Custo e latência", "", *_table(header, rows), ""]
 
 
+def _tool_section(items: Sequence[ToolItem]) -> list[str]:
+    groups: dict[str, list[ToolItem]] = defaultdict(list)
+    for item in items:
+        groups[item.label].append(item)
+    groups = dict(sorted(groups.items()))
+    rows: list[list[str]] = []
+    for label, group in groups.items():
+        for name, split in SPLITS:
+            acc = tool_accuracy([i for i in group if split is None or i.split == split])
+            rows.append(
+                [
+                    label,
+                    name,
+                    str(acc.n),
+                    _fmt(acc.action_pct, 1, "%"),
+                    _fmt(acc.args_pct, 1, "%"),
+                    str(acc.args_n),
+                    str(acc.errors),
+                ]
+            )
+    header = ["Modelo", "Split", "n", "% ação certa", "% argumento certo", "n (follow_up)", "Erros"]
+    columns = [*ACTIONS, ERROR]
+    confusion_rows: list[list[str]] = []
+    for label, group in groups.items():
+        counts = tool_accuracy(group).confusion
+        for expected in ACTIONS:
+            cells = [str(counts.get((expected, got), 0)) for got in columns]
+            confusion_rows.append([label, expected, *cells])
+    note = (
+        "Ação = a efetiva (o código decide). Argumento = cada item de `follow_up_must_address` "
+        "divide palavra-chave com o texto da pergunta; sinônimo não conta."
+    )
+    return [
+        "## Conjunto B — decisão de ferramenta (follow_up)",
+        "",
+        *_table(header, rows),
+        "",
+        note,
+        "",
+        "### Matriz de confusão (esperado × obtido)",
+        "",
+        *_table(["Modelo", "Esperado", *columns], confusion_rows),
+        "",
+    ]
+
+
 def render_report(
     experiment: str,
     items: Sequence[JudgedItem],
     records: Sequence[RunRecord],
     sources: Sequence[Path],
+    tool_items: Sequence[ToolItem] = (),
 ) -> str:
     """Markdown report: one row per model in each table. "n/d" where there is no data."""
     groups = _by_label(items)
@@ -395,7 +551,8 @@ def render_report(
         "",
         f"- Data: {datetime.now(UTC).strftime('%Y-%m-%d')}",
         f"- Fontes: {', '.join(p.name for p in sources) or ND}",
-        f"- Itens no export: {len(items)} · registros de runs: {len(records)}",
+        f"- Itens no export: A {len(items)}, B {len(tool_items)}",
+        f"- Registros de runs: {len(records)}",
         "",
     ]
     sections = [
@@ -403,6 +560,7 @@ def render_report(
         *_bias_section(groups),
         *_consistency_section(groups),
         *_quotes_section(groups),
+        *(_tool_section(tool_items) if tool_items else []),
         *_cost_section(records),
     ]
     return "\n".join([*header, *sections])
@@ -411,17 +569,20 @@ def render_report(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Aggregate eval metrics into results/<exp>.md")
     parser.add_argument("--export", type=Path, required=True, help="promptfoo --output JSON")
+    parser.add_argument("--export-b", type=Path, help="promptfoo --output JSON of set B")
     parser.add_argument("--runs", type=Path, nargs="+", required=True, help="runs/*.jsonl")
     parser.add_argument("--experiment", required=True)
     parser.add_argument("--out-dir", type=Path, default=Path("results"))
     args = parser.parse_args(argv)
     try:
         items = load_promptfoo_export(args.export)
+        tool_items = load_tool_export(args.export_b) if args.export_b else []
         records = load_runs(args.runs, args.experiment)
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    report = render_report(args.experiment, items, records, [args.export, *args.runs])
+    sources = [args.export, *([args.export_b] if args.export_b else []), *args.runs]
+    report = render_report(args.experiment, items, records, sources, tool_items)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     out = args.out_dir / f"{args.experiment}.md"
     out.write_text(report, encoding="utf-8")

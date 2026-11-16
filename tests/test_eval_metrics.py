@@ -412,3 +412,143 @@ def test_render_report_tables_are_well_formed() -> None:
             continue
         assert len({row.count("|") for row in table}) <= 1  # same column count in every row
         table = []
+
+
+# --- set B (tool decisions), task 2.7 ----------------------------------------
+
+FIXTURE_B = Path(__file__).parent / "fixtures" / "promptfoo_export_set_b_small.json"
+
+
+def _tool(
+    expected: str, got: str | None, args_ok: bool | None = None, label: str = "model-a"
+) -> object:
+    return m.ToolItem(
+        item_id="b", label=label, split="test",
+        expected_action=expected, got_action=got, args_ok=args_ok,
+    )  # fmt: skip
+
+
+def test_tool_accuracy_counts_errors_and_confusion() -> None:
+    items = [
+        _tool("end", "end"),
+        _tool("next_question", "next_question"),
+        _tool("follow_up", "follow_up", True),
+        _tool("end", None),
+    ]
+    result = m.tool_accuracy(items)
+    assert result.n == 4
+    assert result.action_pct == 75.0
+    assert result.errors == 1
+    assert result.confusion[("end", "erro")] == 1
+    assert result.confusion[("end", "end")] == 1
+
+
+def test_tool_accuracy_args_only_over_follow_up_items() -> None:
+    items = [_tool("follow_up", "follow_up", True), _tool("follow_up", "follow_up", False)]
+    items.append(_tool("end", "end"))
+    result = m.tool_accuracy(items)
+    assert result.args_pct == 50.0
+    assert result.args_n == 2
+
+
+def test_tool_accuracy_wrong_action_counts_as_args_miss() -> None:
+    # expected follow_up but the action was wrong: the argument cannot be right
+    result = m.tool_accuracy([_tool("follow_up", "next_question", None)])
+    assert result.args_pct == 0.0
+    assert result.args_n == 1
+
+
+def test_tool_accuracy_empty_is_none() -> None:
+    result = m.tool_accuracy([])
+    assert result.n == 0 and result.action_pct is None and result.args_pct is None
+
+
+def test_load_tool_export_reads_labels_splits_and_actions() -> None:
+    items = m.load_tool_export(FIXTURE_B)
+    assert len(items) == 6
+    first = items[0]
+    assert (first.label, first.split, first.expected_action) == ("model-a", "dev", "follow_up")
+    assert first.got_action == "follow_up" and first.args_ok is True
+    assert items[2].got_action == "next_question" and items[2].expected_action == "end"
+    assert items[3].args_ok is False
+
+
+def test_load_tool_export_uses_effective_action() -> None:
+    # model-b b2: raw follow_up but no follow-ups left -> next_question
+    assert m.load_tool_export(FIXTURE_B)[4].got_action == "next_question"
+
+
+def test_load_tool_export_provider_error_has_no_action() -> None:
+    assert m.load_tool_export(FIXTURE_B)[5].got_action is None
+
+
+def test_load_tool_export_rejects_wrong_format(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.json"
+    bad.write_text("[]", encoding="utf-8")
+    with pytest.raises(ValueError):
+        m.load_tool_export(bad)
+
+
+def test_load_runs_experiment_prefix(tmp_path: Path) -> None:
+    a = _record(valid=True, cost=0.01, latency=10).model_copy(
+        update={"experiment": "baseline_v1_set_a"}
+    )
+    other = a.model_copy(update={"experiment": "baseline_v10"})
+    path = tmp_path / "runs.jsonl"
+    path.write_text(a.model_dump_json() + "\n" + other.model_dump_json() + "\n", encoding="utf-8")
+    assert len(m.load_runs([path], "baseline_v1")) == 1
+
+
+def test_render_report_has_set_b_section() -> None:
+    text = m.render_report(
+        "exp", m.load_promptfoo_export(FIXTURE), [], [FIXTURE],
+        tool_items=m.load_tool_export(FIXTURE_B),
+    )  # fmt: skip
+    assert "Conjunto B" in text
+    section = text.split("Conjunto B")[1]
+    assert "| model-b | test (oficial) |" in section
+    assert "Matriz de confusão" in section
+    assert "erro" in section
+
+
+def test_render_report_without_tool_items_has_no_set_b() -> None:
+    assert "Conjunto B" not in _report()
+
+
+def test_cli_with_export_b_writes_set_b(tmp_path: Path) -> None:
+    code = m.main(
+        [
+            "--export", str(FIXTURE),
+            "--export-b", str(FIXTURE_B),
+            "--runs", str(_write_inputs(tmp_path)),
+            "--experiment", "exp",
+            "--out-dir", str(tmp_path),
+        ]
+    )  # fmt: skip
+    assert code == 0
+    assert "Conjunto B" in (tmp_path / "exp.md").read_text(encoding="utf-8")
+
+
+def test_cli_missing_export_b_fails_without_writing(tmp_path: Path) -> None:
+    code = m.main(
+        [
+            "--export", str(FIXTURE),
+            "--export-b", str(tmp_path / "nao_existe_b.json"),
+            "--runs", str(_write_inputs(tmp_path)),
+            "--experiment", "exp",
+            "--out-dir", str(tmp_path),
+        ]
+    )  # fmt: skip
+    assert code == 1
+    assert not (tmp_path / "exp.md").exists()
+
+
+def test_render_report_with_set_b_tables_are_well_formed() -> None:
+    text = m.render_report("exp", [], [], [], tool_items=m.load_tool_export(FIXTURE_B))
+    table: list[str] = []
+    for line in [*text.splitlines(), ""]:
+        if line.startswith("|"):
+            table.append(line)
+            continue
+        assert len({row.count("|") for row in table}) <= 1
+        table = []
