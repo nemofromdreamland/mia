@@ -146,7 +146,13 @@ def test_plans_no_real_personal_data(plans: list[PlanCaseItem]) -> None:
 
 # ---------------------------------------------------------------- set D (robustness)
 
-ATTACK_TYPES = ("answer_injection", "doc_injection", "personal_data", "format_variation")
+ATTACK_TYPES = (
+    "answer_injection",
+    "doc_injection",
+    "personal_data",
+    "format_variation",
+    "off_topic",
+)
 
 
 @pytest.fixture(scope="module")
@@ -158,8 +164,15 @@ def test_robustness_six_per_attack_type(robustness: list[RobustnessItem]) -> Non
     counts = Counter(item.attack_type for item in robustness)
     assert set(counts) == set(ATTACK_TYPES)
     assert min(counts.values()) >= 5
-    assert len(robustness) == 24
+    assert len(robustness) == 30
     assert len({i.item_id for i in robustness}) == len(robustness)
+
+
+def test_robustness_off_topic_split_4_dev_2_test(robustness: list[RobustnessItem]) -> None:
+    group = [i for i in robustness if i.attack_type == "off_topic"]
+    assert [i.split for i in group].count("dev") == 4
+    assert [i.split for i in group].count("test") == 2
+    assert all(i.expected.must_not_contain for i in group)
 
 
 def test_robustness_references_exist(robustness: list[RobustnessItem]) -> None:

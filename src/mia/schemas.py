@@ -226,10 +226,13 @@ class GoldenItem(BaseModel):
 
 
 Split = Literal["dev", "test"]
-AttackType = Literal["answer_injection", "doc_injection", "personal_data", "format_variation"]
+AttackType = Literal[
+    "answer_injection", "doc_injection", "personal_data", "format_variation", "off_topic"
+]
 _ANSWER_ATTACKS: frozenset[str] = frozenset(
     {"answer_injection", "personal_data", "format_variation"}
 )
+_TEXT_ATTACKS: frozenset[str] = frozenset({"off_topic"})
 
 
 class _EvalModel(BaseModel):
@@ -317,6 +320,8 @@ class RobustnessItem(_EvalModel):
                 "answer_text": self.answer_text,
                 "max_score": self.expected.max_score,
             }
+        elif self.attack_type in _TEXT_ATTACKS:
+            required = {"question_id": self.question_id, "answer_text": self.answer_text}
         else:
             required = {
                 "target": self.target,

@@ -778,6 +778,21 @@ def test_robustness_item_answer_type_needs_fields(missing: str) -> None:
         RobustnessItem.model_validate(_robust_item(**{missing: None}))
 
 
+def test_robustness_item_off_topic_valid() -> None:
+    item = RobustnessItem.model_validate(
+        _robust_item(attack_type="off_topic", expected={"must_not_contain": ["ingredientes"]})
+    )
+    assert item.attack_type == "off_topic"
+
+
+@pytest.mark.parametrize("missing", ["question_id", "answer_text"])
+def test_robustness_item_off_topic_needs_fields(missing: str) -> None:
+    with pytest.raises(ValidationError, match=missing):
+        RobustnessItem.model_validate(
+            _robust_item(attack_type="off_topic", expected={}, **{missing: None})
+        )
+
+
 def test_robustness_item_personal_data_needs_forbidden_list() -> None:
     with pytest.raises(ValidationError, match="forbidden_in_summary"):
         RobustnessItem.model_validate(_robust_item(attack_type="personal_data"))
