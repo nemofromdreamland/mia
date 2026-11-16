@@ -201,6 +201,8 @@ def load_runs(paths: Sequence[Path], experiment: str | None) -> list[RunRecord]:
 def _judge_score(result: dict[str, Any]) -> tuple[int | None, bool | None]:
     """(score, quotes_ok) from one Promptfoo result; (None, None) on error or bad output."""
     response = result.get("response") or {}
+    if response.get("error"):
+        return None, None
     output = response.get("output") or ""
     try:
         data = json.loads(output)

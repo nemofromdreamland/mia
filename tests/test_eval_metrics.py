@@ -262,6 +262,17 @@ def test_load_export_provider_error_has_no_score() -> None:
     assert failed.quotes_ok is None
 
 
+def test_provider_error_ignores_residual_valid_output() -> None:
+    result = {
+        "response": {
+            "error": "provider failed after producing output",
+            "output": '{"score": 5, "quotes_verified": true}',
+        }
+    }
+
+    assert m._judge_score(result) == (None, None)
+
+
 def test_load_export_keeps_paraphrase_link() -> None:
     items = m.load_promptfoo_export(FIXTURE)
     para = next(i for i in items if i.variant == "paraphrase")
