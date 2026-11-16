@@ -211,6 +211,7 @@ def test_feliz_completo_with_pdf(tmp_path: Path) -> None:
     assert [r["prompt_name"] for r in records] == ["screening", "planner"]
     assert [r["prompt_version"] for r in records] == [2, 2]
     assert {r["session_id"] for r in records} == {"s1"}
+    assert {r["experiment"] for r in records} == {"t"}
 
 
 def test_models_never_see_personal_data(tmp_path: Path) -> None:
