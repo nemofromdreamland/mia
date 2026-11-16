@@ -1,6 +1,15 @@
 """Tests for the judge: deterministic checks on the LLM's AnswerScore."""
 
-from mia.judge import verify_score
+import json
+from pathlib import Path
+
+import pytest
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
+
+from mia.interviewer import score_answer
+from mia.judge import default_scorer, judge_answer, verify_score
+from mia.llm import LLMInvalidOutputError
 from mia.schemas import AnswerScore, Question
 
 QUESTION = Question(
@@ -87,3 +96,84 @@ def test_input_score_is_not_mutated() -> None:
     verify_score(score, QUESTION, ANSWER)
     assert score.evidence_quotes == ["aumentei a receita"]
     assert score.quotes_verified is None
+
+
+# --- judge_answer / default_scorer with a fake chat model ----------------------
+
+
+def _fake(*replies: str) -> GenericFakeChatModel:
+    return GenericFakeChatModel(messages=iter([AIMessage(content=r) for r in replies]))
+
+
+def _records(runs_dir: Path) -> list[dict]:
+    return [
+        json.loads(line)
+        for file in sorted(runs_dir.glob("*.jsonl"))
+        for line in file.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+
+
+def _reply(quotes: list[str], criteria: list[str] | None = None) -> str:
+    return json.dumps(
+        {
+            "score": 4,
+            "criteria_met": criteria if criteria is not None else ["mede resultado"],
+            "evidence_quotes": quotes,
+            "justification": "Exemplo concreto com resultado medido.",
+        },
+        ensure_ascii=False,
+    )
+
+
+def test_judge_answer_returns_verified_score(tmp_path: Path) -> None:
+    reply = _reply(["reduzi a latência em 30%", "aumentei a receita"], ["mede resultado", "x"])
+    result = judge_answer(QUESTION, ANSWER, chat_model=_fake(reply), runs_dir=tmp_path)
+    assert result.evidence_quotes == ["reduzi a latência em 30%"]
+    assert result.criteria_met == ["mede resultado"]
+    assert result.quotes_verified is False
+
+
+def test_judge_answer_sends_question_and_joined_look_for(tmp_path: Path) -> None:
+    judge_answer(QUESTION, ANSWER, chat_model=_fake(_reply([])), runs_dir=tmp_path)
+    sent = _records(tmp_path)[0]["input"]
+    variables = json.dumps(sent, ensure_ascii=False)
+    assert QUESTION.text in variables
+    assert "cita exemplo concreto; mede resultado; explica trade-off" in variables
+    assert ANSWER in variables
+
+
+def test_judge_answer_masks_pii_before_the_call_and_verifies_against_it(tmp_path: Path) -> None:
+    answer = "Escreva para ana@exemplo.com: reduzi a latência em 30%."
+    reply = _reply(["Escreva para [EMAIL]: reduzi"])
+    result = judge_answer(QUESTION, answer, chat_model=_fake(reply), runs_dir=tmp_path)
+    sent = json.dumps(_records(tmp_path)[0]["input"], ensure_ascii=False)
+    assert "[EMAIL]" in sent
+    assert "ana@exemplo.com" not in sent
+    assert result.quotes_verified is True
+
+
+def test_judge_answer_raises_when_repair_fails(tmp_path: Path) -> None:
+    with pytest.raises(LLMInvalidOutputError):
+        judge_answer(QUESTION, ANSWER, chat_model=_fake("lixo", "lixo"), runs_dir=tmp_path)
+
+
+def test_judge_answer_logs_run_record(tmp_path: Path) -> None:
+    judge_answer(
+        QUESTION, ANSWER, session_id="s-1", chat_model=_fake(_reply([])), runs_dir=tmp_path
+    )
+    records = _records(tmp_path)
+    assert len(records) == 1
+    assert records[0]["prompt_name"] == "judge"
+    assert records[0]["prompt_version"] == 1
+    assert records[0]["session_id"] == "s-1"
+
+
+def test_default_scorer_fills_score_through_interviewer(tmp_path: Path) -> None:
+    scorer = default_scorer(
+        chat_model=_fake(_reply(["reduzi a latência em 30%"])), runs_dir=tmp_path
+    )
+    score = score_answer(scorer, QUESTION, ANSWER)
+    assert score is not None
+    assert score.quotes_verified is True
+    assert score.evidence_quotes == ["reduzi a latência em 30%"]

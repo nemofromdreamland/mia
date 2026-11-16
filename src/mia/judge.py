@@ -4,8 +4,15 @@ The LLM drafts the AnswerScore; the code decides what survives: criteria must co
 from look_for and every evidence quote must exist literally in the answer.
 """
 
+from typing import Any, Final
+
 from mia.checks import quote_in_source
+from mia.interviewer import Scorer
+from mia.pii import mask_text
+from mia.prompts import load_prompt, run_prompt_structured
 from mia.schemas import AnswerScore, Question
+
+JUDGE_PROMPT: Final = ("judge", 1)
 
 
 def verify_score(score: AnswerScore, question: Question, answer: str) -> AnswerScore:
@@ -20,3 +27,36 @@ def verify_score(score: AnswerScore, question: Question, answer: str) -> AnswerS
             "quotes_verified": len(quotes) == len(score.evidence_quotes),
         }
     )
+
+
+def judge_answer(
+    question: Question,
+    answer: str,
+    *,
+    session_id: str | None = None,
+    **llm_options: Any,
+) -> AnswerScore:
+    """Mask the answer, ask the judge prompt, then verify what the LLM returned."""
+    masked = mask_text(answer)
+    variables = {
+        "question": question.text,
+        "look_for": "; ".join(question.look_for),
+        "answer": masked,
+    }
+    score = run_prompt_structured(
+        load_prompt(*JUDGE_PROMPT),
+        variables,
+        AnswerScore,
+        session_id=session_id,
+        **llm_options,
+    )
+    return verify_score(score, question, masked)
+
+
+def default_scorer(**llm_options: Any) -> Scorer:
+    """Scorer for the interviewer (1.7) backed by the real judge."""
+
+    def score(question: Question, answer: str) -> AnswerScore:
+        return judge_answer(question, answer, **llm_options)
+
+    return score
