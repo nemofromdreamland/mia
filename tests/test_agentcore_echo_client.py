@@ -135,6 +135,19 @@ def test_main_mismatch_exits_1() -> None:
     assert client.main(["--arn", ARN], connect=make_connect(ws), session=fake_session()) == 1
 
 
+def test_main_error_with_signed_url_is_redacted(capsys: pytest.CaptureFixture[str]) -> None:
+    signed_url = client.build_signed_ws_url(ARN, "us-east-1", fake_session())
+    signature = signed_url.split("X-Amz-Signature=")[1].split("&")[0]
+    ws = FakeWs(fail=OSError(f"server rejected WebSocket connection: HTTP 403 ({signed_url})"))
+    code = client.main(["--arn", ARN], connect=make_connect(ws), session=fake_session())
+    output = "".join(capsys.readouterr())
+    assert code == 1
+    assert "HTTP 403" in output
+    assert "X-Amz-Signature=***" in output
+    assert signature not in output
+    assert "AKIAFAKEFAKEFAKE" not in output  # access key id travels in X-Amz-Credential
+
+
 def test_main_connection_error_exits_1_without_secret(capsys: pytest.CaptureFixture[str]) -> None:
     ws = FakeWs(fail=OSError("403 Forbidden"))
     code = client.main(["--arn", ARN], connect=make_connect(ws), session=fake_session())
