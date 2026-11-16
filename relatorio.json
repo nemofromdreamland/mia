@@ -1,0 +1,63 @@
+{
+  "session_id": "01M7J5XDA4RZEDP4G89251Y4VW",
+  "report": {
+    "overall_score": 3.5,
+    "competencies": [
+      {
+        "competency": "Documentação técnica e comunicação escrita",
+        "score": 4.0,
+        "summary": "Demonstra excelente prática de documentação com abordagem estruturada (README, docstrings, diagramas) e foco em clareza para novos colaboradores."
+      },
+      {
+        "competency": "Trabalho com RAG e sistemas de recuperação de informação",
+        "score": 3.0,
+        "summary": "Conhecimento sólido de técnicas de RAG (busca híbrida, chunking, métricas), mas com oportunidades de aprofundamento em estratégias avançadas de otimização."
+      }
+    ],
+    "strengths": [
+      "Documentação estruturada e orientada ao usuário: README com passo a passo, variáveis de ambiente e diagramas de fluxo",
+      "Abordagem sistemática em RAG: implementou golden dataset e automatizou testes de qualidade",
+      "Uso de métricas apropriadas: Recall@k, MRR, Ragas (faithfulness e relevância) para medir desempenho",
+      "Iteração baseada em dados: identificou problema de chunks curtos e ajustou parâmetros com resultado mensurável (20% de melhoria)",
+      "Comunicação clara das decisões técnicas: explica o porquê das escolhas, não apenas o quê"
+    ],
+    "improvements": [
+      {
+        "question_id": "q2",
+        "issue": "Faltou detalhar estratégias de tratamento de alucinações além da validação manual e métricas de fidelidade. Não mencionou técnicas como reranking, prompt engineering ou verificação de atribuição.",
+        "stronger_answer": "Além de medir fidelidade com Ragas, implementei um reranker para reordenar os documentos recuperados antes de passar ao LLM, e adicionei um prompt que força o modelo a citar a fonte exata. Isso reduziu alucinações em 35% e melhorou a confiança do usuário."
+      },
+      {
+        "question_id": "q2",
+        "issue": "Não explorou trade-offs entre latência e qualidade de forma explícita. Mencionou que o aumento de chunk size não prejudicou latência, mas não apresentou números ou análise de impacto.",
+        "stronger_answer": "Monitorei latência em paralelo: o aumento de chunk size de 300 para 800 tokens elevou o tempo de recuperação de 150ms para 180ms, um trade-off aceitável dado o ganho de 20% em recall. Testei também reduzir o overlap de 15% para 10% e não houve degradação significativa, economizando 5% de latência."
+      }
+    ]
+  },
+  "summary": {
+    "headline": "Forte em documentação e comunicação; experiência sólida em RAG com métricas bem definidas.",
+    "summary": "O candidato demonstra excelente capacidade de documentação técnica, com abordagem estruturada que inclui README, docstrings e decisões arquiteturais registradas. Possui experiência prática em sistemas RAG com implementação de métricas quantificáveis (Recall@k, MRR, Ragas). Mostrou capacidade de iterar baseado em dados, identificando gargalos e implementando melhorias mensuráveis.",
+    "strengths": [
+      {
+        "point": "Documentação técnica estruturada e orientada ao usuário",
+        "answer_quote": "Eu sigo três pilares: um README com o passo a passo de instalação e variáveis de ambiente, código limpo com nomes autoexplicativos e docstrings nas funções principais."
+      },
+      {
+        "point": "Implementação de métricas e validação sistemática em RAG",
+        "answer_quote": "Automatizei a execução desse golden dataset para medir a recuperação e a geração separadamente. Na busca, acompanhei o Recall@k (se o documento certo vinha no top-3) e o MRR para ver se ele aparecia no topo."
+      },
+      {
+        "point": "Iteração baseada em dados com impacto mensurável",
+        "answer_quote": "Aumentei o tamanho dos blocos (de 300 para 800 tokens) e adicionei um overlap de 15%. Só essa mudança fez a taxa de recuperação subir cerca de 20% sem prejudicar a latência."
+      }
+    ],
+    "concerns": [
+      {
+        "point": "Profundidade limitada em otimizações avançadas de RAG",
+        "answer_quote": "Para a recuperação, filtrei os documentos por metadados (como categoria e data) e usei busca híbrida — combinando palavras-chave e busca semântica — para trazer os trechos mais relevantes."
+      }
+    ],
+    "suggested_next_step": "advance",
+    "next_step_reason": "Desempenho forte em documentação (4/4) e competência sólida em RAG com abordagem sistemática e orientada a métricas (3/5), justificando avanço na seleção."
+  }
+}

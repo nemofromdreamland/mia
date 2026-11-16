@@ -32,9 +32,7 @@ def _missing_api_key_error() -> ValidationError:
     raise AssertionError("Expected fixture validation to fail")
 
 
-def test_main_reports_configuration_error_without_traceback(
-    monkeypatch, capsys
-) -> None:
+def test_main_reports_configuration_error_without_traceback(monkeypatch, capsys) -> None:
     judge = Mock(side_effect=_missing_api_key_error())
     monkeypatch.setattr(judge_demo, "judge_answer", judge)
 
