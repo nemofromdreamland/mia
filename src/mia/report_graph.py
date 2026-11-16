@@ -4,15 +4,41 @@ The LLM drafts the texts; the code decides the numbers, which items survive and
 whether the anonymous summary is acceptable.
 """
 
+import re
 from statistics import mean
+from typing import Final
 
+from mia.checks import quote_in_source
 from mia.interviewer import Scorer, score_answer
-from mia.pii import mask_text
-from mia.schemas import InterviewPlan, Question, Turn
+from mia.pii import CPF, EMAIL, NAME, PHONE, URL, mask_text
+from mia.schemas import (
+    CandidateSummary,
+    CompetencyScore,
+    InterviewPlan,
+    Question,
+    Report,
+    SummaryPoint,
+    Turn,
+)
+
+_PLACEHOLDERS: Final = (EMAIL, PHONE, CPF, URL, NAME)
+# Age and explicit gender only; pronouns ("ele"/"ela") are left out on purpose (false positives).
+_AGE_GENDER_RE: Final = re.compile(
+    r"\d+\s*anos|\b(?:idade|jovem|idoso|homem|mulher|masculino|feminino|a candidata)\b",
+    re.IGNORECASE,
+)
 
 
 class ReportError(Exception):
     """The report cannot be built from these turns."""
+
+
+class ReportValidationError(ReportError):
+    """The drafted report or summary broke a rule the code enforces."""
+
+    def __init__(self, problems: list[str]) -> None:
+        super().__init__("; ".join(problems))
+        self.problems = problems
 
 
 def _questions(plan: InterviewPlan) -> dict[str, Question]:
@@ -62,3 +88,69 @@ def build_transcript(plan: InterviewPlan, turns: list[Turn]) -> str:
         if turn.answer_text is not None
     ]
     return "\n\n".join(blocks)
+
+
+def apply_report_rules(
+    report: Report, competency_scores: dict[str, float], overall: float, answered_ids: set[str]
+) -> Report:
+    """Force the code's numbers, drop unknown competencies and orphan improvements."""
+    drafted = {item.competency: item for item in report.competencies}
+    missing = [name for name in competency_scores if name not in drafted]
+    if missing:
+        raise ReportValidationError([f"report is missing competencies: {', '.join(missing)}"])
+    competencies = [
+        CompetencyScore(competency=name, score=score, summary=drafted[name].summary)
+        for name, score in competency_scores.items()
+    ]
+    improvements = [i for i in report.improvements if i.question_id in answered_ids]
+    return report.model_copy(
+        update={
+            "overall_score": overall,
+            "competencies": competencies,
+            "improvements": improvements,
+        }
+    )
+
+
+def _verified(points: list[SummaryPoint], answers_masked: list[str]) -> list[SummaryPoint]:
+    return [
+        point
+        for point in points
+        if any(quote_in_source(point.answer_quote, answer) for answer in answers_masked)
+    ]
+
+
+def verify_summary(summary: CandidateSummary, answers_masked: list[str]) -> CandidateSummary:
+    """Keep only points whose quote exists in an answer; an emptied list is an error."""
+    strengths = _verified(summary.strengths, answers_masked)
+    concerns = _verified(summary.concerns, answers_masked)
+    problems = [
+        f"no verifiable quote left in {name}"
+        for name, kept in (("strengths", strengths), ("concerns", concerns))
+        if not kept
+    ]
+    if problems:
+        raise ReportValidationError(problems)
+    return summary.model_copy(update={"strengths": strengths, "concerns": concerns})
+
+
+def _summary_texts(summary: CandidateSummary) -> list[tuple[str, str]]:
+    fields = [
+        ("headline", summary.headline),
+        ("summary", summary.summary),
+        ("next_step_reason", summary.next_step_reason),
+    ]
+    for kind, points in (("strengths", summary.strengths), ("concerns", summary.concerns)):
+        fields += [(f"{kind}[{i}].point", point.point) for i, point in enumerate(points)]
+    return fields
+
+
+def personal_data_problems(summary: CandidateSummary) -> list[str]:
+    """Personal data, gender or age mentions in the recruiter-facing texts."""
+    problems = []
+    for field, text in _summary_texts(summary):
+        if mask_text(text) != text or any(mark in text for mark in _PLACEHOLDERS):
+            problems.append(f"{field}: contains personal data")
+        if _AGE_GENDER_RE.search(text):
+            problems.append(f"{field}: mentions age or gender")
+    return problems
