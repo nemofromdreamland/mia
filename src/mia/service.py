@@ -1,0 +1,169 @@
+"""Service layer: the 11 operations of the API, with no HTTP.
+
+The service applies the session lifecycle rules. It keeps no state between calls and
+receives every dependency (repositories, models, clock) through `ServiceDeps`.
+"""
+
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Literal, Protocol, runtime_checkable
+
+from pydantic import BaseModel, ConfigDict
+
+from mia.cases import CaseError, CaseNotFoundError, load_case
+from mia.cases import list_cases as load_cases
+from mia.interviewer import Clock, Decider, Scorer, Writer
+from mia.report_graph import ReportResult
+from mia.repositories import (
+    CandidateCounter,
+    ReportStore,
+    SessionNotFoundError,
+    SessionRepository,
+)
+from mia.schemas import (
+    CaseSummary,
+    InterviewPlan,
+    Mode,
+    Persona,
+    PublicTurn,
+    Session,
+    SessionView,
+    Turn,
+)
+from mia.simulation import new_session_id
+
+ErrorCode = Literal[
+    "not_found",
+    "invalid_input",
+    "invalid_state",
+    "session_limit",
+    "quota_exceeded",
+    "demo_paused",
+    "llm_invalid_output",
+    "provider_unavailable",
+    "internal",
+]
+
+
+class ServiceError(Exception):
+    """Business error with a stable code; the API (3.2) turns it into HTTP."""
+
+    def __init__(self, code: ErrorCode, message: str, *, retryable: bool = False) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.retryable = retryable
+
+
+@runtime_checkable
+class SessionGate(Protocol):
+    """Quota + kill switch checked before a session is created (real one: 3.4)."""
+
+    def check(self, visitor_id: str) -> None: ...  # raises ServiceError when it refuses
+
+
+class OpenGate:
+    """Gate that always allows (placeholder until 3.4)."""
+
+    def check(self, visitor_id: str) -> None:
+        return None
+
+
+class ServiceDeps(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
+
+    repo: SessionRepository
+    reports: ReportStore
+    counter: CandidateCounter
+    gate: SessionGate
+    decider: Decider
+    writer_for: Callable[[Persona], Writer]
+    scorer: Scorer
+    report: Callable[[InterviewPlan, list[Turn]], ReportResult]
+    clock: Clock
+    cases_dir: Path
+
+
+@contextmanager
+def _session_lookup() -> Iterator[None]:
+    """A missing session and another visitor's session look the same: not_found."""
+    try:
+        yield
+    except SessionNotFoundError as exc:
+        raise ServiceError("not_found", "Sessão não encontrada.") from exc
+
+
+def to_public(turn: Turn) -> PublicTurn:
+    """Drop what must not leave the server before the report (score, decision, follow-up)."""
+    return PublicTurn(
+        turn_no=turn.turn_no,
+        question_id=turn.question_id,
+        interviewer_text=turn.interviewer_text,
+        answer_text=turn.answer_text,
+        created_at=turn.created_at,
+    )
+
+
+def list_cases(deps: ServiceDeps) -> list[CaseSummary]:
+    completed = deps.repo.list_completed()
+    summaries: list[CaseSummary] = []
+    for case in load_cases(deps.cases_dir):
+        done = sum(1 for s in completed if s.case_id == case.case_id)
+        summaries.append(
+            CaseSummary(
+                **case.model_dump(include=set(CaseSummary.model_fields)), completed_sessions=done
+            )
+        )
+    return summaries
+
+
+def create_session(deps: ServiceDeps, visitor_id: str, case_id: str, mode: Mode) -> Session:
+    try:
+        loaded = load_case(case_id, deps.cases_dir)
+    except CaseNotFoundError as exc:
+        raise ServiceError("invalid_input", f"Caso inexistente: {case_id}") from exc
+    except CaseError as exc:
+        raise ServiceError("internal", "Caso indisponível.") from exc
+    deps.gate.check(visitor_id)  # quota / kill switch before writing anything
+    case = loaded.case
+    now = deps.clock()
+    session = Session(
+        visitor_id=visitor_id,
+        session_id=new_session_id(deps.clock),
+        case_id=case.case_id,
+        case_version=case.version,
+        candidate_no=deps.counter.next(case.case_id),
+        status="ready",
+        persona=case.persona,
+        language=case.language,
+        mode=mode,
+        job_title=loaded.screening.job_title,
+        fit_score=loaded.screening.fit_score,
+        created_at=now,
+        updated_at=now,
+    )
+    deps.repo.create_session(session)
+    return session
+
+
+def list_sessions(deps: ServiceDeps, visitor_id: str) -> list[Session]:
+    return deps.repo.list_sessions(visitor_id)
+
+
+def get_session(deps: ServiceDeps, visitor_id: str, session_id: str) -> SessionView:
+    with _session_lookup():
+        session = deps.repo.get_session(visitor_id, session_id)
+        if session.status == "ready" and session.case_id:
+            loaded = load_case(session.case_id, deps.cases_dir)
+            return SessionView(session=session, case=loaded.case, screening=loaded.screening)
+        if session.status == "in_progress":
+            turns = deps.repo.list_turns(visitor_id, session_id)
+            return SessionView(session=session, turns=[to_public(t) for t in turns])
+    return SessionView(session=session)
+
+
+def delete_session(deps: ServiceDeps, visitor_id: str, session_id: str) -> None:
+    with _session_lookup():
+        deps.repo.delete_session(visitor_id, session_id)
+    deps.reports.delete(session_id)

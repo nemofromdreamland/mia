@@ -206,6 +206,41 @@ class Session(BaseModel):
     ended_at: datetime | None = None
 
 
+# ---------- Service responses ----------
+
+
+class SessionView(BaseModel):
+    """GET /sessions/{id}: the session plus what the current status allows to show."""
+
+    session: Session
+    case: Case | None = None
+    screening: Screening | None = None
+    turns: list[PublicTurn] | None = None
+
+
+class AnswerResult(BaseModel):
+    turn: PublicTurn | None = None
+    ended: bool = False
+
+
+class ReportView(BaseModel):
+    report: Report
+    turns: list[Turn]
+    is_above_case_avg: bool | None  # None without an average (< 3 completed sessions)
+
+
+class RecruiterList(BaseModel):
+    stats: list[CaseStats]
+    candidates: list[RecruiterCandidateRow]
+
+
+class RecruiterCandidate(BaseModel):
+    row: RecruiterCandidateRow
+    summary: CandidateSummary
+    report: Report
+    turns: list[Turn]
+
+
 # ---------- Evaluation ----------
 
 
