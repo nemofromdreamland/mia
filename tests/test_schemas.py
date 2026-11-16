@@ -5,19 +5,26 @@ import pytest
 from pydantic import ValidationError
 
 from mia.schemas import (
+    AnswerScore,
     Case,
     CaseSummary,
+    CompetencyScore,
     Evidence,
+    Improvement,
     InterviewPlan,
     Language,
     Level,
     Mode,
     Persona,
     Phase,
+    PublicTurn,
     Question,
+    Report,
     RunRecord,
     Screening,
     SessionStatus,
+    ToolDecision,
+    Turn,
 )
 
 
@@ -305,3 +312,146 @@ def test_plan_accepts_question_count_limits(n: int) -> None:
 )
 def test_preparation_models_round_trip_through_json(model: Any) -> None:
     assert type(model).model_validate_json(model.model_dump_json()) == model
+
+
+# ---------- Interview + Report ----------
+
+NOW = datetime(2026, 11, 15, 12, 0, tzinfo=UTC)
+
+
+def _decision_fields(**overrides: Any) -> dict[str, Any]:
+    return {"action": "next_question", "reason": "answer was complete", **overrides}
+
+
+def _answer_score_fields(**overrides: Any) -> dict[str, Any]:
+    return {
+        "score": 3,
+        "criteria_met": ["a"],
+        "evidence_quotes": ["I did X"],
+        "justification": "partial answer",
+        **overrides,
+    }
+
+
+def _turn_fields(**overrides: Any) -> dict[str, Any]:
+    return {
+        "session_id": "s1",
+        "turn_no": 1,
+        "question_id": "q1",
+        "interviewer_text": "Tell me about yourself.",
+        "created_at": NOW,
+        **overrides,
+    }
+
+
+def _report_fields(**overrides: Any) -> dict[str, Any]:
+    return {
+        "overall_score": 3.5,
+        "competencies": [{"competency": "python", "score": 4.0, "summary": "solid"}],
+        "strengths": ["clear"],
+        "improvements": [{"question_id": "q1", "issue": "vague", "stronger_answer": "..."}],
+        **overrides,
+    }
+
+
+def test_tool_decision_rejects_unknown_action() -> None:
+    with pytest.raises(ValidationError):
+        ToolDecision(**_decision_fields(action="skip"))
+
+
+def test_tool_decision_follow_up_text_defaults_to_none() -> None:
+    assert ToolDecision(**_decision_fields()).follow_up_text is None
+
+
+@pytest.mark.parametrize("value", [0, 6])
+def test_answer_score_rejects_score_outside_1_5(value: int) -> None:
+    with pytest.raises(ValidationError):
+        AnswerScore(**_answer_score_fields(score=value))
+
+
+@pytest.mark.parametrize("value", [1, 5])
+def test_answer_score_accepts_score_limits(value: int) -> None:
+    assert AnswerScore(**_answer_score_fields(score=value)).score == value
+
+
+def test_answer_score_accepts_empty_lists_and_defaults_quotes_verified() -> None:
+    score = AnswerScore(**_answer_score_fields(criteria_met=[], evidence_quotes=[]))
+    assert score.criteria_met == [] and score.evidence_quotes == []
+    assert score.quotes_verified is None
+
+
+def test_turn_requires_created_at() -> None:
+    fields = _turn_fields()
+    del fields["created_at"]
+    with pytest.raises(ValidationError):
+        Turn(**fields)
+
+
+def test_turn_minimal_uses_defaults() -> None:
+    turn = Turn(**_turn_fields())
+    assert turn.is_follow_up is False
+    assert turn.answer_text is None and turn.decision is None and turn.score is None
+    assert turn.latency_ms is None
+
+
+def test_public_turn_dump_hides_scoring_fields() -> None:
+    fields = {
+        "turn_no": 1,
+        "question_id": "q1",
+        "interviewer_text": "Hi",
+        "created_at": NOW,
+    }
+    dumped = PublicTurn(**fields).model_dump()
+    assert set(dumped) == {
+        "turn_no",
+        "question_id",
+        "interviewer_text",
+        "answer_text",
+        "created_at",
+    }
+
+
+@pytest.mark.parametrize("value", [0.5, 0.99, 5.01])
+def test_competency_score_rejects_score_outside_1_5(value: float) -> None:
+    with pytest.raises(ValidationError):
+        CompetencyScore(competency="python", score=value, summary="x")
+
+
+@pytest.mark.parametrize("value", [0.99, 5.01])
+def test_report_rejects_overall_score_outside_1_5(value: float) -> None:
+    with pytest.raises(ValidationError):
+        Report(**_report_fields(overall_score=value))
+
+
+@pytest.mark.parametrize("value", [1.0, 3.5, 5.0])
+def test_report_accepts_overall_score_limits_and_fractions(value: float) -> None:
+    assert Report(**_report_fields(overall_score=value)).overall_score == value
+
+
+def test_report_accepts_empty_lists() -> None:
+    report = Report(**_report_fields(competencies=[], strengths=[], improvements=[]))
+    assert report.competencies == [] and report.strengths == [] and report.improvements == []
+
+
+def test_improvement_requires_stronger_answer() -> None:
+    with pytest.raises(ValidationError):
+        Improvement(question_id="q1", issue="vague")  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        Turn(
+            **_turn_fields(
+                answer_text="I did X",
+                decision=_decision_fields(),
+                score=_answer_score_fields(),
+            )
+        ),
+        Report(**_report_fields()),
+    ],
+    ids=["turn", "report"],
+)
+def test_interview_models_round_trip_through_json(model: Any) -> None:
+    assert type(model).model_validate_json(model.model_dump_json()) == model
+

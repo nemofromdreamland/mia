@@ -82,6 +82,68 @@ class InterviewPlan(BaseModel):
     questions: list[Question] = Field(min_length=4, max_length=12)
 
 
+# ---------- Interview ----------
+
+
+class ToolDecision(BaseModel):
+    action: Literal["follow_up", "next_question", "end"]
+    follow_up_text: str | None = None
+    reason: str
+
+
+class AnswerScore(BaseModel):
+    score: int = Field(ge=1, le=5)
+    criteria_met: list[str]
+    evidence_quotes: list[str]
+    justification: str
+    quotes_verified: bool | None = None  # filled in by code
+
+
+class Turn(BaseModel):
+    session_id: str
+    turn_no: int
+    question_id: str
+    interviewer_text: str
+    answer_text: str | None = None
+    is_follow_up: bool = False
+    decision: ToolDecision | None = None
+    score: AnswerScore | None = None
+    latency_ms: int | None = None
+    created_at: datetime
+
+
+class PublicTurn(BaseModel):
+    """Turn as the frontend sees it DURING the interview: no score, decision or follow-up flag."""
+
+    turn_no: int
+    question_id: str
+    interviewer_text: str
+    answer_text: str | None = None
+    created_at: datetime
+
+
+# ---------- Report ----------
+
+
+class CompetencyScore(BaseModel):
+    competency: str
+    score: float = Field(ge=1, le=5)
+    summary: str
+
+
+class Improvement(BaseModel):
+    question_id: str
+    issue: str
+    stronger_answer: str
+
+
+class Report(BaseModel):
+    overall_score: float = Field(ge=1, le=5)
+    competencies: list[CompetencyScore]
+    strengths: list[str]
+    improvements: list[Improvement]
+
+
 # ---------- Runs ----------
 
 
