@@ -116,7 +116,7 @@ def test_run_tool_item_returns_error_instead_of_raising(tmp_path: Path) -> None:
         runs_dir=tmp_path,
         chat_model=Boom(messages=iter([])),
     )
-    assert "RuntimeError" in out["error"]
+    assert out == {"error": "RuntimeError: x"}
 
 
 def test_call_api_unknown_question_id_is_an_error() -> None:
