@@ -2,7 +2,8 @@
 # prompts/judge/v<N>.yaml; "prompt" below is only a marker. Run with -j 1 and --no-cache.
 # Iteration (task 2.9, step 3): only the dev split, only judge-v2:
 #   npx promptfoo eval -c evals/judge_v1_vs_v2.yaml --filter-providers judge-v2 --no-cache -j 1
-# Final run (step 5): remove the `config: {split: dev}` below, both providers, one single time.
+# Final run (step 5): all 70 items, both providers, one single time (no split filter).
+# The dev-only iteration is: add `config: {split: dev}` under the tests path.
 description: "MIA judge v1 vs v2 - set A"
 
 prompts:
@@ -26,8 +27,6 @@ providers:
 
 tests:
   - path: file://tests_set_a.py:generate_tests
-    config:
-      split: dev   # dev only while tuning; the test split is never used for tuning
 
 defaultTest:
   assert:
