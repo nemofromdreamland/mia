@@ -5,12 +5,13 @@ datetimes become ISO 8601 strings, floats become `Decimal`, and `None` fields ar
 not stored (that keeps the `by_case` GSI sparse: only sessions with `ended_at`).
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
 import boto3
+from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
 
 from mia.repositories import (
@@ -141,6 +142,75 @@ class DynamoSessionRepository:
                 f"status atual {actual.status!r}, esperado {expected_status!r}"
             ) from error
         return item_to_session(response["Attributes"])
+
+    def put_turn(self, visitor_id: str, turn: Turn) -> None:
+        self.get_session(visitor_id, turn.session_id)  # turns have no visitor_id: check owner
+        try:
+            self._turns.put_item(Item=turn_to_item(turn))
+        except ClientError as error:
+            raise RepositoryError(str(error)) from error
+
+    def list_turns(self, visitor_id: str, session_id: str) -> list[Turn]:
+        self.get_session(visitor_id, session_id)
+        items = _read_all(
+            self._turns.query, KeyConditionExpression=Key("session_id").eq(session_id)
+        )
+        return [item_to_turn(item) for item in items]  # the table already sorts by turn_no
+
+    def list_sessions(self, visitor_id: str) -> list[Session]:
+        """The visitor's sessions, newest first (same order as the in-memory repository)."""
+        items = _read_all(
+            self._sessions.query, KeyConditionExpression=Key("visitor_id").eq(visitor_id)
+        )
+        sessions = [item_to_session(item) for item in items]
+        sessions.sort(key=lambda s: (s.created_at, s.session_id), reverse=True)
+        return sessions
+
+    def list_completed(self, case_id: str | None = None) -> list[Session]:
+        """Completed sessions: GSI query for one case, filtered scan for all of them."""
+        completed = Attr("status").eq("completed")
+        if case_id is None:
+            items = _read_all(self._sessions.scan, FilterExpression=completed)
+        else:
+            items = _read_all(
+                self._sessions.query,
+                IndexName=BY_CASE_INDEX,
+                KeyConditionExpression=Key("case_id").eq(case_id),
+                FilterExpression=completed,
+            )
+        return [item_to_session(item) for item in items]
+
+    def delete_session(self, visitor_id: str, session_id: str) -> None:
+        self.get_session(visitor_id, session_id)
+        try:
+            keys = _read_all(
+                self._turns.query,
+                KeyConditionExpression=Key("session_id").eq(session_id),
+                ProjectionExpression="session_id, turn_no",
+            )
+            with self._turns.batch_writer() as batch:
+                for key in keys:
+                    batch.delete_item(
+                        Key={"session_id": key["session_id"], "turn_no": key["turn_no"]}
+                    )
+            self._sessions.delete_item(Key={"visitor_id": visitor_id, "session_id": session_id})
+        except ClientError as error:
+            raise RepositoryError(str(error)) from error
+
+
+def _read_all(operation: Callable[..., Any], **kwargs: Any) -> list[dict[str, Any]]:
+    """Run a Query/Scan and follow `LastEvaluatedKey` until the last page."""
+    items: list[dict[str, Any]] = []
+    start: dict[str, Any] = {}
+    try:
+        while True:
+            response = operation(**kwargs, **start)
+            items.extend(response.get("Items", []))
+            if "LastEvaluatedKey" not in response:
+                return items
+            start = {"ExclusiveStartKey": response["LastEvaluatedKey"]}
+    except ClientError as error:
+        raise RepositoryError(str(error)) from error
 
 
 def _update_args(
