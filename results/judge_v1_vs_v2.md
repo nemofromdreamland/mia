@@ -47,12 +47,16 @@
 | dev | % ±1 | 71.4% | 98.0% | +26.53 | melhorou |
 | dev | Viés de verbosidade | 1.00 | 0.14 | -0.86 | melhorou |
 | dev | Citações verificáveis | 69.4% | 81.6% | +12.24 | melhorou |
+| dev | Custo médio (US$) | 0.00348 | 0.00382 | +0.00034 | piorou |
+| dev | p95 (ms) | 4999 | 4532 | -467 | melhorou |
 | test (oficial) | Kappa | 0.61 | 0.82 | +0.21 | melhorou |
 | test (oficial) | Erro médio | 1.00 | 0.62 | -0.38 | melhorou |
 | test (oficial) | MAE | 1.00 | 0.62 | -0.38 | melhorou |
 | test (oficial) | % ±1 | 76.2% | 100.0% | +23.81 | melhorou |
 | test (oficial) | Viés de verbosidade | 2.33 | 0.67 | -1.67 | melhorou |
 | test (oficial) | Citações verificáveis | 57.1% | 66.7% | +9.52 | melhorou |
+| test (oficial) | Custo médio (US$) | 0.00356 | 0.00383 | +0.00026 | piorou |
+| test (oficial) | p95 (ms) | 4566 | 4240 | -326 | melhorou |
 | todos | Kappa | 0.57 | 0.81 | +0.24 | melhorou |
 | todos | Erro médio | 1.04 | 0.56 | -0.49 | melhorou |
 | todos | MAE | 1.04 | 0.61 | -0.43 | melhorou |
@@ -68,6 +72,8 @@ Métricas:
 
 | Split | Métrica | judge-v1 | judge-v2 |
 |---|---|---|---|
+| dev | Custo médio (US$) | 0.00348 | 0.00382 |
+| test (oficial) | Custo médio (US$) | 0.00356 | 0.00383 |
 | todos | Custo médio (US$) | 0.00351 | 0.00382 |
 
 ## Custo e latência

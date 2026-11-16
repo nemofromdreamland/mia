@@ -34,6 +34,8 @@ def _item(
     split: str | None = "test",
     paraphrase_of: str | None = None,
     label: str = "model-a",
+    run_key: tuple[str, str] | None = None,
+    prompt_version: int | None = None,
 ) -> object:
     return m.JudgedItem(
         item_id=item_id,
@@ -44,6 +46,8 @@ def _item(
         human_score=human,
         judge_score=judge,
         quotes_ok=True,
+        run_key=run_key,
+        prompt_version=prompt_version,
     )
 
 
@@ -171,19 +175,27 @@ def test_percentile_empty_is_none() -> None:
 
 
 def _record(
-    *, valid: bool | None, cost: float, latency: int, model: str = "haiku", prompt: str = "judge"
+    *,
+    valid: bool | None,
+    cost: float,
+    latency: int,
+    model: str = "haiku",
+    prompt: str = "judge",
+    version: int = 1,
+    question: str | None = None,
+    answer: str | None = None,
 ) -> RunRecord:
     return RunRecord(
         run_id="r",
         experiment="exp",
         session_id=None,
         prompt_name=prompt,
-        prompt_version=1,
+        prompt_version=version,
         provider="bedrock",
         model=model,
         params={},
         input_hash="h",
-        input={},
+        input={} if question is None else {"question": question, "answer": answer},
         output_raw="",
         output_parsed=None,
         json_valid_first_try=valid,
@@ -753,6 +765,28 @@ def test_compare_cost_and_p95_come_from_runs_by_prompt_version() -> None:
     assert cost.verdict == "melhorou"
     p95 = _delta(deltas, "todos", "p95 (ms)")
     assert (p95.v1, p95.v2, p95.verdict) == (300.0, 200.0, "melhorou")
+
+
+def test_compare_cost_and_p95_are_calculated_for_each_split() -> None:
+    items = [
+        _item("d-v1", 3, 3, split="dev", label="judge-v1", run_key=("qd", "ad"), prompt_version=1),
+        _item("d-v2", 3, 3, split="dev", label="judge-v2", run_key=("qd", "ad"), prompt_version=2),
+        _item("t-v1", 3, 3, split="test", label="judge-v1", run_key=("qt", "at"), prompt_version=1),
+        _item("t-v2", 3, 3, split="test", label="judge-v2", run_key=("qt", "at"), prompt_version=2),
+    ]
+    records = [
+        _record(valid=True, cost=0.01, latency=100, version=1, question="qd", answer="ad"),
+        _record(valid=True, cost=0.02, latency=200, version=2, question="qd", answer="ad"),
+        _record(valid=True, cost=0.03, latency=300, version=1, question="qt", answer="at"),
+        _record(valid=True, cost=0.04, latency=400, version=2, question="qt", answer="at"),
+    ]
+
+    deltas = m.compare_versions(items, records, "judge-v1", "judge-v2")
+
+    assert _delta(deltas, "dev", "Custo médio (US$)").v1 == pytest.approx(0.01)
+    assert _delta(deltas, "test (oficial)", "Custo médio (US$)").v2 == pytest.approx(0.04)
+    assert _delta(deltas, "dev", "p95 (ms)").v2 == 200
+    assert _delta(deltas, "test (oficial)", "p95 (ms)").v1 == 300
 
 
 def test_compare_without_runs_has_nd_cost() -> None:

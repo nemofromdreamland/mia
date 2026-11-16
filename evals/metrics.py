@@ -36,6 +36,7 @@ class JudgedItem:
     judge_score: int | None  # None = provider error or output outside the schema
     quotes_ok: bool | None
     prompt_version: int | None = None  # from provider metadata; links a label to its RunRecords
+    run_key: tuple[str, str] | None = None  # question + answer, shared with RunRecord.input
 
 
 @dataclass(frozen=True)
@@ -237,6 +238,8 @@ def _judged_item(result: dict[str, Any]) -> JudgedItem:
         item = json.loads(item)
     score, quotes_ok = _judge_score(result)
     version = ((result.get("response") or {}).get("metadata") or {}).get("prompt_version")
+    question = item.get("question")
+    question_text = question.get("text") if isinstance(question, dict) else question
     return JudgedItem(
         item_id=item["item_id"],
         label=(result.get("provider") or {}).get("label") or "default",
@@ -247,6 +250,9 @@ def _judged_item(result: dict[str, Any]) -> JudgedItem:
         judge_score=score,
         quotes_ok=quotes_ok,
         prompt_version=version if isinstance(version, int) else None,
+        run_key=(question_text, item["answer_text"])
+        if isinstance(question_text, str) and isinstance(item.get("answer_text"), str)
+        else None,
     )
 
 
@@ -769,9 +775,16 @@ def _quality_metrics(items: Sequence[JudgedItem]) -> dict[str, float | None]:
 def _run_metrics(
     items: Sequence[JudgedItem], records: Sequence[RunRecord]
 ) -> dict[str, float | None]:
-    """Cost and p95 of the judge calls whose prompt_version matches this label's items."""
+    """Cost and p95 for the prompt version and golden items in this label/split."""
     versions = {i.prompt_version for i in items if i.prompt_version is not None}
-    mine = [r for r in records if r.prompt_name == "judge" and r.prompt_version in versions]
+    run_keys = {i.run_key for i in items if i.run_key is not None}
+    mine = [
+        r
+        for r in records
+        if r.prompt_name == "judge"
+        and r.prompt_version in versions
+        and (not run_keys or (r.input.get("question"), r.input.get("answer")) in run_keys)
+    ]
     stats = run_stats(mine)
     if len(stats) != 1:  # none, or several models under one label: not comparable
         return {name: None for name in RUN_METRICS}
@@ -789,17 +802,15 @@ def compare_versions(
     base_label: str,
     new_label: str,
 ) -> list[MetricDelta]:
-    """Metric by metric and split, new minus base. Cost and p95 only for "todos"
-    (a RunRecord has no split)."""
+    """Metric by metric and split, new minus base."""
     base = [i for i in items if i.label == base_label]
     new = [i for i in items if i.label == new_label]
     deltas: list[MetricDelta] = []
     for name, split in SPLITS:
         v1 = _quality_metrics([i for i in base if split is None or i.split == split])
         v2 = _quality_metrics([i for i in new if split is None or i.split == split])
-        if split is None:
-            v1 |= _run_metrics(base, records)
-            v2 |= _run_metrics(new, records)
+        v1 |= _run_metrics([i for i in base if split is None or i.split == split], records)
+        v2 |= _run_metrics([i for i in new if split is None or i.split == split], records)
         deltas += [_delta(name, metric, v1[metric], v2[metric]) for metric in v1]
     return deltas
 
