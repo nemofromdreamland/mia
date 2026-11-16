@@ -4,5 +4,10 @@
   "description": "Eval tooling for MIA (Promptfoo runs the Python providers and assertions).",
   "devDependencies": {
     "promptfoo": "0.125.1"
+  },
+  "overrides": {
+    "@hono/node-server": "2.1.8",
+    "glob": "14.0.2",
+    "minimatch": "11.0.8"
   }
 }
