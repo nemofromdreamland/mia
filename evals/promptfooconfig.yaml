@@ -1,0 +1,28 @@
+# Set A (judge) through Promptfoo. The real prompt lives in prompts/judge/v<N>.yaml and is
+# loaded by mia.judge; the "prompt" below is only a marker (never a copy of the prompt).
+description: "MIA set A - judge vs. human scores"
+
+prompts:
+  - "{{item_id}}"
+
+providers:
+  - id: file://providers/judge_provider.py
+    label: judge-default-route   # no config.model -> prompt_models.judge in config/models.yaml
+    config:
+      experiment: promptfoo_set_a
+      # model: "bedrock:<model_id>"   # add another provider entry with a model for 2.7
+
+tests: file://tests_set_a.py:generate_tests   # all 70 items; pass config {split: dev|test} to filter
+
+defaultTest:
+  assert:
+    - type: python
+      value: file://assertions/judge_asserts.py:assert_schema
+    - type: python
+      value: file://assertions/judge_asserts.py:assert_quotes_verified
+    - type: python
+      value: file://assertions/judge_asserts.py:assert_score_within_one
+
+evaluateOptions:
+  maxConcurrency: 2
+  cache: true

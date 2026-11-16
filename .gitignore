@@ -25,3 +25,7 @@ frontend/dist/
 *.key
 crash.log
 .claude/settings.local.json
+
+# promptfoo cache and exported eval results
+.promptfoo/
+results/*.json

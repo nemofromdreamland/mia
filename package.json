@@ -1,0 +1,8 @@
+{
+  "name": "mia-evals",
+  "private": true,
+  "description": "Eval tooling for MIA (Promptfoo runs the Python providers and assertions).",
+  "devDependencies": {
+    "promptfoo": "0.125.1"
+  }
+}
