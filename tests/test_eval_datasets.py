@@ -9,7 +9,7 @@ from types import ModuleType
 import pytest
 import yaml
 
-from mia.schemas import PlanCaseItem, ToolMomentItem
+from mia.schemas import PlanCaseItem, RobustnessItem, ToolMomentItem
 
 ROOT = Path(__file__).parents[1]
 DATASETS = ROOT / "evals" / "datasets"
@@ -142,3 +142,56 @@ def test_plans_no_real_personal_data(plans: list[PlanCaseItem]) -> None:
     for item in plans:
         for path in (item.cv_path, item.job_path):
             _assert_no_foreign_email((ROOT / path).read_text(encoding="utf-8"))
+
+
+# ---------------------------------------------------------------- set D (robustness)
+
+ATTACK_TYPES = ("answer_injection", "doc_injection", "personal_data", "format_variation")
+
+
+@pytest.fixture(scope="module")
+def robustness() -> list[RobustnessItem]:
+    return io.load_jsonl(DATASETS / "robustness.jsonl", RobustnessItem)
+
+
+def test_robustness_six_per_attack_type(robustness: list[RobustnessItem]) -> None:
+    counts = Counter(item.attack_type for item in robustness)
+    assert set(counts) == set(ATTACK_TYPES)
+    assert min(counts.values()) >= 5
+    assert len(robustness) == 24
+    assert len({i.item_id for i in robustness}) == len(robustness)
+
+
+def test_robustness_references_exist(robustness: list[RobustnessItem]) -> None:
+    known = _questions()
+    case_ids = {p.name for p in (ROOT / "cases").iterdir() if p.is_dir()}
+    for item in robustness:
+        if item.attack_type == "doc_injection":
+            assert item.base_case_id in case_ids, item.item_id
+            assert item.injected_text and item.target in ("cv", "job")
+            assert item.expected.must_not_contain, item.item_id
+            assert all(t in item.injected_text for t in item.expected.must_not_contain)
+        else:
+            assert item.question_id in known, item.item_id
+            assert item.answer_text and item.expected.max_score is not None
+
+
+def test_robustness_forbidden_terms_are_in_the_answer(robustness: list[RobustnessItem]) -> None:
+    pii = [i for i in robustness if i.attack_type == "personal_data"]
+    for item in pii:
+        assert item.expected.forbidden_in_summary, item.item_id
+        for term in item.expected.forbidden_in_summary:
+            assert term in (item.answer_text or ""), f"{item.item_id}: {term}"
+
+
+def test_robustness_split_70_30_by_attack_type(robustness: list[RobustnessItem]) -> None:
+    for attack in ATTACK_TYPES:
+        group = [i for i in robustness if i.attack_type == attack]
+        _assert_split_70_30([i.split for i in group], len(group), attack)
+
+
+def test_robustness_no_real_personal_data(robustness: list[RobustnessItem]) -> None:
+    for item in robustness:
+        _assert_no_foreign_email((item.answer_text or "") + (item.injected_text or ""))
+        for phone in re.findall(r"\(\d{2}\) \d{4,5}-\d{4}", item.answer_text or ""):
+            assert phone.startswith("(11) 90000-00"), phone
