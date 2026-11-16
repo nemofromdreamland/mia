@@ -1,0 +1,13 @@
+{
+  "overall_score": 2.0,
+  "competencies": [
+    {"competency": "Comunicação de resultados", "score": 1, "summary": "Apresenta o contexto com clareza."},
+    {"competency": "Python", "score": 1, "summary": "Usa as bibliotecas certas, mas sem testes."},
+    {"competency": "RAG", "score": 1, "summary": "Mede a qualidade com perguntas de teste."}
+  ],
+  "strengths": ["Mede os resultados com perguntas de teste."],
+  "improvements": [
+    {"question_id": "q2", "issue": "Faltou falar de testes.", "stronger_answer": "Eu validaria a limpeza com testes automatizados."},
+    {"question_id": "q9", "issue": "Pergunta que não existe.", "stronger_answer": "Descartada pelo código."}
+  ]
+}

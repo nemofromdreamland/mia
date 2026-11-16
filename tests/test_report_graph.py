@@ -4,15 +4,21 @@ import json
 from pathlib import Path
 
 import pytest
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
 
+from mia.llm import LLMInvalidOutputError
 from mia.report_graph import (
     ReportError,
+    ReportResult,
     ReportValidationError,
     aggregate_scores,
     apply_report_rules,
+    build_report_graph,
     build_transcript,
     ensure_scores,
     personal_data_problems,
+    run_report,
     verify_summary,
 )
 from mia.schemas import (
@@ -235,3 +241,109 @@ def test_personal_data_problems_checks_points_and_raw_pii() -> None:
     summary = make_summary()
     summary.strengths[0].point = "Escreva para a@b.com"
     assert len(personal_data_problems(summary)) == 1
+
+
+# ---------- graph (R3, R9-R11) ----------
+
+
+def _reply(name: str) -> str:
+    return (FIXTURES / "report" / name).read_text(encoding="utf-8")
+
+
+def _fake(*replies: str) -> GenericFakeChatModel:
+    return GenericFakeChatModel(messages=iter([AIMessage(content=r) for r in replies]))
+
+
+def _records(runs_dir: Path) -> list[dict]:
+    lines = [
+        line
+        for file in sorted(runs_dir.glob("*.jsonl"))
+        for line in file.read_text(encoding="utf-8").splitlines()
+    ]
+    return [json.loads(line) for line in lines if line]
+
+
+def test_grafo_feliz_returns_valid_result_and_two_run_records(tmp_path: Path) -> None:
+    scorer, calls = fixed_scorer(2)
+    result = run_report(
+        load_plan(),
+        load_turns(),
+        scorer=scorer,
+        chat_model=_fake(_reply("report_ok.json"), _reply("summary_ok.json")),
+        runs_dir=tmp_path,
+        session_id="s1",
+    )
+    assert isinstance(result, ReportResult)
+    assert len(calls) == 1  # only turn 2 had no score
+    assert result.report.overall_score == 3.8
+    scores = {c.competency: c.score for c in result.report.competencies}
+    assert scores == {"Comunicação de resultados": 4.0, "Python": 2.5, "RAG": 5.0}
+    assert [i.question_id for i in result.report.improvements] == ["q2"]
+    assert all(t.score is not None for t in result.turns if t.answer_text is not None)
+    records = _records(tmp_path)
+    assert [r["prompt_name"] for r in records] == ["report", "candidate_summary"]
+    assert {r["session_id"] for r in records} == {"s1"}
+
+
+def test_grafo_prompts_receive_masked_transcript_and_code_scores(tmp_path: Path) -> None:
+    scorer, _ = fixed_scorer(2)
+    run_report(
+        load_plan(),
+        load_turns(),
+        scorer=scorer,
+        chat_model=_fake(_reply("report_ok.json"), _reply("summary_ok.json")),
+        runs_dir=tmp_path,
+    )
+    records = _records(tmp_path)
+    raw = json.dumps(records, ensure_ascii=False)
+    for personal in ["ana.teste@example.com", "98765-4321"]:
+        assert personal not in raw
+    assert "[EMAIL]" in raw and "[TELEFONE]" in raw
+    assert records[0]["input"]["competencies"] == "Comunicação de resultados, Python, RAG"
+    assert records[1]["input"]["overall_score"] == "3.8"
+    scored_ids = {row["question_id"] for row in json.loads(records[0]["input"]["scores"])}
+    assert scored_ids == {"q1", "q2", "q3"}
+
+
+def test_grafo_without_scores_raises_before_prompts(tmp_path: Path) -> None:
+    def failing(question: Question, answer: str) -> AnswerScore:
+        raise RuntimeError("judge down")
+
+    turns = [t.model_copy(update={"score": None}) for t in load_turns()]
+    with pytest.raises(ReportError):
+        run_report(load_plan(), turns, scorer=failing, chat_model=_fake(), runs_dir=tmp_path)
+    assert _records(tmp_path) == []
+
+
+def test_grafo_pii_in_summary_raises_with_problems(tmp_path: Path) -> None:
+    summary = json.loads(_reply("summary_ok.json"))
+    summary["headline"] = "Perfil jovem com boa base"
+    scorer, _ = fixed_scorer(2)
+    with pytest.raises(ReportValidationError) as info:
+        run_report(
+            load_plan(),
+            load_turns(),
+            scorer=scorer,
+            chat_model=_fake(_reply("report_ok.json"), json.dumps(summary)),
+            runs_dir=tmp_path,
+        )
+    assert info.value.problems == ["headline: mentions age or gender"]
+
+
+def test_grafo_invalid_json_propagates(tmp_path: Path) -> None:
+    scorer, _ = fixed_scorer(2)
+    with pytest.raises(LLMInvalidOutputError):
+        run_report(
+            load_plan(),
+            load_turns(),
+            scorer=scorer,
+            chat_model=_fake("lixo", "mais lixo"),
+            runs_dir=tmp_path,
+        )
+
+
+def test_build_report_graph_has_the_five_nodes() -> None:
+    scorer, _ = fixed_scorer()
+    graph = build_report_graph(scorer=scorer, chat_model=_fake())
+    expected = {"ensure_scores", "aggregate", "report", "summary", "validate"}
+    assert expected <= set(graph.get_graph().nodes)

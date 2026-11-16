@@ -4,13 +4,22 @@ The LLM drafts the texts; the code decides the numbers, which items survive and
 whether the anonymous summary is acceptable.
 """
 
+import json
 import re
+from pathlib import Path
 from statistics import mean
-from typing import Final
+from typing import Any, Final, TypedDict
+
+from langchain_core.language_models import BaseChatModel
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
+from pydantic import BaseModel
 
 from mia.checks import quote_in_source
 from mia.interviewer import Scorer, score_answer
+from mia.llm import DEFAULT_RUNS_DIR
 from mia.pii import CPF, EMAIL, NAME, PHONE, URL, mask_text
+from mia.prompts import load_prompt, run_prompt_structured
 from mia.schemas import (
     CandidateSummary,
     CompetencyScore,
@@ -21,6 +30,8 @@ from mia.schemas import (
     Turn,
 )
 
+REPORT_PROMPT: Final = ("report", 1)
+SUMMARY_PROMPT: Final = ("candidate_summary", 1)
 _PLACEHOLDERS: Final = (EMAIL, PHONE, CPF, URL, NAME)
 # Age and explicit gender only; pronouns ("ele"/"ela") are left out on purpose (false positives).
 _AGE_GENDER_RE: Final = re.compile(
@@ -39,6 +50,23 @@ class ReportValidationError(ReportError):
     def __init__(self, problems: list[str]) -> None:
         super().__init__("; ".join(problems))
         self.problems = problems
+
+
+class ReportResult(BaseModel):
+    report: Report
+    summary: CandidateSummary
+    turns: list[Turn]
+
+
+class ReportState(TypedDict, total=False):
+    plan: InterviewPlan
+    turns: list[Turn]
+    competency_scores: dict[str, float]
+    overall_score: float
+    transcript: str  # masked
+    report: Report
+    summary: CandidateSummary
+    problems: list[str]
 
 
 def _questions(plan: InterviewPlan) -> dict[str, Question]:
@@ -154,3 +182,108 @@ def personal_data_problems(summary: CandidateSummary) -> list[str]:
         if _AGE_GENDER_RE.search(text):
             problems.append(f"{field}: mentions age or gender")
     return problems
+
+
+def _scores_json(plan: InterviewPlan, turns: list[Turn]) -> str:
+    questions = _questions(plan)
+    rows = [
+        {
+            "question_id": turn.question_id,
+            "competency": _question_for(questions, turn).competency,
+            "score": turn.score.score,
+        }
+        for turn in turns
+        if turn.score is not None
+    ]
+    return json.dumps(rows, ensure_ascii=False)
+
+
+def build_report_graph(
+    *,
+    scorer: Scorer,
+    model: str | None = None,
+    experiment: str | None = None,
+    session_id: str | None = None,
+    runs_dir: Path = DEFAULT_RUNS_DIR,
+    chat_model: BaseChatModel | None = None,
+) -> CompiledStateGraph:
+    """Straight-line graph: ensure scores -> aggregate -> report -> summary -> validate."""
+    report_prompt = load_prompt(*REPORT_PROMPT)
+    summary_prompt = load_prompt(*SUMMARY_PROMPT)
+    call_options: dict[str, Any] = {
+        "model": model,
+        "experiment": experiment,
+        "session_id": session_id,
+        "runs_dir": runs_dir,
+        "chat_model": chat_model,
+    }
+
+    def _ensure_scores(state: ReportState) -> ReportState:
+        return {"turns": ensure_scores(state["plan"], state["turns"], scorer)}
+
+    def _aggregate(state: ReportState) -> ReportState:
+        scores, overall = aggregate_scores(state["plan"], state["turns"])
+        return {
+            "competency_scores": scores,
+            "overall_score": overall,
+            "transcript": build_transcript(state["plan"], state["turns"]),
+        }
+
+    def _report(state: ReportState) -> ReportState:
+        drafted = run_prompt_structured(
+            report_prompt,
+            {
+                "competencies": ", ".join(state["competency_scores"]),
+                "scores": _scores_json(state["plan"], state["turns"]),
+                "transcript": state["transcript"],
+            },
+            Report,
+            **call_options,
+        )
+        answered = {t.question_id for t in state["turns"] if t.answer_text is not None}
+        report = apply_report_rules(
+            drafted, state["competency_scores"], state["overall_score"], answered
+        )
+        return {"report": report}
+
+    def _summary(state: ReportState) -> ReportState:
+        drafted = run_prompt_structured(
+            summary_prompt,
+            {
+                "overall_score": str(state["overall_score"]),
+                "scores": _scores_json(state["plan"], state["turns"]),
+                "transcript": state["transcript"],
+            },
+            CandidateSummary,
+            **call_options,
+        )
+        masked = [mask_text(t.answer_text) for t in state["turns"] if t.answer_text is not None]
+        return {"summary": verify_summary(drafted, masked)}
+
+    def _validate(state: ReportState) -> ReportState:
+        return {"problems": personal_data_problems(state["summary"])}
+
+    steps = [
+        ("ensure_scores", _ensure_scores),
+        ("aggregate", _aggregate),
+        ("report", _report),
+        ("summary", _summary),
+        ("validate", _validate),
+    ]
+    graph = StateGraph(ReportState)
+    for name, node in steps:
+        graph.add_node(name, node)
+    names = [name for name, _ in steps]
+    graph.add_edge(START, names[0])
+    for current, following in zip(names, names[1:], strict=False):
+        graph.add_edge(current, following)
+    graph.add_edge(names[-1], END)
+    return graph.compile()
+
+
+def run_report(plan: InterviewPlan, turns: list[Turn], **graph_options: Any) -> ReportResult:
+    """Build the report and the anonymous summary; raise ReportError if a rule is broken."""
+    state = build_report_graph(**graph_options).invoke({"plan": plan, "turns": turns})
+    if state["problems"]:
+        raise ReportValidationError(state["problems"])
+    return ReportResult(report=state["report"], summary=state["summary"], turns=state["turns"])

@@ -1,0 +1,12 @@
+{
+  "headline": "Boa base prática, com espaço para evoluir em testes.",
+  "summary": "A pessoa mostra experiência prática com dados e avaliação de RAG. Explica suas escolhas com clareza. Pode melhorar a prática de testes. Resultado geral promissor.",
+  "strengths": [
+    {"point": "Avalia o chatbot com métrica", "answer_quote": "Montei 50 perguntas de teste e medi acertos"}
+  ],
+  "concerns": [
+    {"point": "Testes vieram tarde", "answer_quote": "Eu teria criado testes para a limpeza dos dados desde o começo"}
+  ],
+  "suggested_next_step": "advance_with_caution",
+  "next_step_reason": "Base prática sólida, a confirmar em uma conversa técnica."
+}
