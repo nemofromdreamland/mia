@@ -34,6 +34,7 @@ def judge_answer(
     answer: str,
     *,
     session_id: str | None = None,
+    params: dict[str, Any] | None = None,
     **llm_options: Any,
 ) -> AnswerScore:
     """Mask the answer, ask the judge prompt, then verify what the LLM returned."""
@@ -48,6 +49,7 @@ def judge_answer(
         variables,
         AnswerScore,
         session_id=session_id,
+        params=params,
         **llm_options,
     )
     return verify_score(score, question, masked)

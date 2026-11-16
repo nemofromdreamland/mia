@@ -206,6 +206,7 @@ def build_report_graph(
     session_id: str | None = None,
     runs_dir: Path = DEFAULT_RUNS_DIR,
     chat_model: BaseChatModel | None = None,
+    params: dict[str, Any] | None = None,
 ) -> CompiledStateGraph:
     """Straight-line graph: ensure scores -> aggregate -> report -> summary -> validate."""
     report_prompt = load_prompt(*REPORT_PROMPT)
@@ -216,6 +217,7 @@ def build_report_graph(
         "session_id": session_id,
         "runs_dir": runs_dir,
         "chat_model": chat_model,
+        "params": params,
     }
 
     def _ensure_scores(state: ReportState) -> ReportState:

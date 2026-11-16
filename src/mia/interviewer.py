@@ -172,6 +172,7 @@ def should_follow_up(
     status: TimeStatus,
     *,
     limits: InterviewLimits = DEFAULT_LIMITS,
+    params: dict[str, Any] | None = None,
     **llm_options: Any,
 ) -> ToolDecision:
     """Ask the fast LLM (prompt follow_up) whether to dig deeper; `answer` must be masked."""
@@ -188,6 +189,7 @@ def should_follow_up(
         variables,
         ToolDecision,
         session_id=state.session_id,
+        params=params,
         **llm_options,
     )
 

@@ -215,6 +215,7 @@ def run_prompt(
     models: ModelsConfig | None = None,
     runs_dir: Path = DEFAULT_RUNS_DIR,
     chat_model: BaseChatModel | None = None,
+    params: dict[str, Any] | None = None,
 ) -> str:
     """Render the prompt and call llm.invoke; the RunRecord gets its name, version and params.
 
@@ -230,7 +231,7 @@ def run_prompt(
         user=rendered.user,
         input=dict(variables),
         model=spec.ref,
-        params=prompt.params,
+        params={**prompt.params, **(params or {})},
         experiment=experiment,
         session_id=session_id,
         config=models,
@@ -250,6 +251,7 @@ def run_prompt_structured[T: BaseModel](
     models: ModelsConfig | None = None,
     runs_dir: Path = DEFAULT_RUNS_DIR,
     chat_model: BaseChatModel | None = None,
+    params: dict[str, Any] | None = None,
 ) -> T:
     """Like run_prompt, but the reply is validated against output_schema (one repair try).
 
@@ -266,7 +268,7 @@ def run_prompt_structured[T: BaseModel](
         user=rendered.user,
         input=dict(variables),
         model=spec.ref,
-        params=prompt.params,
+        params={**prompt.params, **(params or {})},
         experiment=experiment,
         session_id=session_id,
         config=models,

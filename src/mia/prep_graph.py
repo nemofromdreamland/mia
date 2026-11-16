@@ -123,6 +123,7 @@ def build_prep_graph(
     chat_model: BaseChatModel | None = None,
     screening_version: int = 3,
     planner_version: int = 2,
+    params: dict[str, Any] | None = None,
 ) -> CompiledStateGraph:
     """Straight-line graph: extract -> mask -> screen -> plan -> validate."""
     screening_prompt = load_prompt("screening", screening_version)
@@ -133,6 +134,7 @@ def build_prep_graph(
         "session_id": session_id,
         "runs_dir": runs_dir,
         "chat_model": chat_model,
+        "params": params,
     }
 
     def _extract(state: PrepState) -> PrepState:
@@ -192,9 +194,11 @@ def build_prep_graph(
     return graph.compile()
 
 
-def run_prep(data: PrepInput, **graph_options: Any) -> PrepResult:
+def run_prep(
+    data: PrepInput, *, params: dict[str, Any] | None = None, **graph_options: Any
+) -> PrepResult:
     """Run the preparation; raise PrepValidationError if any check finds a problem."""
-    state = build_prep_graph(**graph_options).invoke({"input": data})
+    state = build_prep_graph(params=params, **graph_options).invoke({"input": data})
     if state["problems"]:
         raise PrepValidationError(state["problems"], state["screening"], state["plan"])
     return PrepResult(screening=state["screening"], plan=state["plan"])
