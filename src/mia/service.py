@@ -25,7 +25,9 @@ from mia.interviewer import (
     answer,
     start,
 )
-from mia.report_graph import ReportResult
+from mia.interviewer import end_interview as close_interview
+from mia.llm import LLMInvalidOutputError
+from mia.report_graph import ReportError, ReportResult
 from mia.repositories import (
     CandidateCounter,
     ReportStore,
@@ -40,6 +42,7 @@ from mia.schemas import (
     Mode,
     Persona,
     PublicTurn,
+    ReportView,
     Session,
     SessionStatus,
     SessionView,
@@ -278,10 +281,11 @@ def send_answer(
         )
     except InterviewError as exc:
         raise ServiceError("invalid_input", str(exc)) from exc
-    if step.state.ended:
-        raise NotImplementedError("interview end + report: step 4 of spec 3.1")
     deps.repo.put_turn(visitor_id, step.answered)
     deps.repo.put_turn(visitor_id, step.next_turn)
+    if step.state.ended:
+        _finish(deps, session, step.state)
+        return AnswerResult(ended=True)
     _update(
         deps,
         session,
@@ -293,3 +297,66 @@ def send_answer(
         },
     )
     return AnswerResult(turn=to_public(step.next_turn))
+
+
+def _finish(deps: ServiceDeps, session: Session, state: InterviewState) -> None:
+    """Move to `scoring`, build the report and complete the session.
+
+    On failure the session stays in `scoring` with `error` and the turns are kept.
+    """
+    _update(
+        deps,
+        session,
+        "in_progress",
+        {"status": "scoring", "turn_count": state.turn_count, "ended_at": deps.clock()},
+    )
+    try:
+        result = deps.report(
+            state.plan, deps.repo.list_turns(session.visitor_id, session.session_id)
+        )
+    except (ReportError, LLMInvalidOutputError) as exc:
+        message = str(exc) or type(exc).__name__
+        _update(deps, session, "scoring", {"error": message})
+        raise ServiceError(
+            "llm_invalid_output", "Não foi possível gerar o relatório.", retryable=True
+        ) from exc
+    for turn in result.turns:  # the report scored any missing turn
+        deps.repo.put_turn(session.visitor_id, turn)
+    deps.reports.save(session.session_id, result.report, result.summary)  # before `completed`
+    _update(
+        deps,
+        session,
+        "scoring",
+        {
+            "status": "completed",
+            "overall_score": result.report.overall_score,
+            "competency_scores": {c.competency: c.score for c in result.report.competencies},
+            "headline": result.summary.headline,
+            "error": None,
+        },
+    )
+
+
+def end_interview(deps: ServiceDeps, visitor_id: str, session_id: str) -> dict[str, str]:
+    with _session_lookup():
+        session = deps.repo.get_session(visitor_id, session_id)
+    if session.status != "in_progress":
+        raise ServiceError("invalid_state", "A entrevista não está em andamento.")
+    plan = _load_plan(deps, session)
+    state = rebuild_state(session, plan, deps.repo.list_turns(visitor_id, session_id))
+    ended, farewell = close_interview(
+        state, "visitor", writer=deps.writer_for(session.persona), clock=deps.clock
+    )
+    deps.repo.put_turn(visitor_id, farewell)
+    _finish(deps, session, ended)
+    return {"status": "scoring"}
+
+
+def get_report(deps: ServiceDeps, visitor_id: str, session_id: str) -> ReportView:
+    with _session_lookup():
+        session = deps.repo.get_session(visitor_id, session_id)
+        if session.status != "completed":
+            raise ServiceError("invalid_state", "O relatório ainda não está pronto.")
+        report, _ = deps.reports.load(session_id)
+    turns = deps.repo.list_turns(visitor_id, session_id)
+    return ReportView(report=report, turns=turns, is_above_case_avg=None)  # average: step 5

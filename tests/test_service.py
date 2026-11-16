@@ -5,17 +5,29 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from mia.cases import CASES_DIR
+from mia.report_graph import ReportError, ReportResult
 from mia.repositories import (
     InMemoryCandidateCounter,
     InMemoryReportStore,
     InMemorySessionRepository,
 )
-from mia.schemas import AnswerScore, Session, ToolDecision, Turn
+from mia.schemas import (
+    AnswerScore,
+    CandidateSummary,
+    CompetencyScore,
+    Report,
+    Session,
+    SummaryPoint,
+    ToolDecision,
+    Turn,
+)
 from mia.service import (
     ServiceDeps,
     ServiceError,
     create_session,
     delete_session,
+    end_interview,
+    get_report,
     get_session,
     list_cases,
     list_sessions,
@@ -390,3 +402,138 @@ def test_start_and_send_other_visitor_is_not_found() -> None:
         with pytest.raises(ServiceError) as exc:
             call()
         assert exc.value.code == "not_found"
+
+
+def fake_report_result(plan, turns) -> ReportResult:
+    report = Report(
+        overall_score=4.0,
+        competencies=[CompetencyScore(competency="comunicação", score=4.0, summary="ok")],
+        strengths=["claro"],
+        improvements=[],
+    )
+    point = SummaryPoint(point="ok", answer_quote="resposta")
+    summary = CandidateSummary(
+        headline="Boa entrevista",
+        summary="Resumo.",
+        strengths=[point],
+        concerns=[point],
+        suggested_next_step="advance",
+        next_step_reason="ok",
+    )
+    return ReportResult(report=report, summary=summary, turns=turns)
+
+
+def with_report(deps: ServiceDeps, report=fake_report_result) -> tuple[ServiceDeps, Calls]:
+    calls = Calls()
+
+    def counted(plan, turns):
+        calls.report += 1
+        return report(plan, turns)
+
+    return deps.model_copy(update={"report": counted}), calls
+
+
+def test_end_interview_completes_with_report_saved() -> None:
+    deps, calls = with_report(make_deps(scorer=fake_score))
+    session = started(deps)
+
+    result = end_interview(deps, VISITOR_A, session.session_id)
+
+    assert result == {"status": "scoring"}
+    assert calls.report == 1
+    saved = deps.repo.get_session(VISITOR_A, session.session_id)
+    assert saved.status == "completed"
+    assert saved.overall_score == 4.0 and saved.headline == "Boa entrevista"
+    assert saved.competency_scores == {"comunicação": 4.0}
+    assert saved.ended_at is not None
+    report, summary = deps.reports.load(session.session_id)
+    assert report.overall_score == 4.0 and summary.headline == "Boa entrevista"
+    assert len(deps.repo.list_turns(VISITOR_A, session.session_id)) == 2  # question + farewell
+
+
+def test_end_interview_outside_in_progress_is_invalid_state() -> None:
+    deps, calls = with_report(make_deps())
+    session = create_session(deps, VISITOR_A, CASE_ID, "text")  # ready
+
+    with pytest.raises(ServiceError) as exc:
+        end_interview(deps, VISITOR_A, session.session_id)
+
+    assert exc.value.code == "invalid_state"
+    assert calls.report == 0
+
+
+def test_end_interview_other_visitor_is_not_found() -> None:
+    deps, _ = with_report(make_deps())
+    session = started(deps)
+
+    with pytest.raises(ServiceError) as exc:
+        end_interview(deps, VISITOR_B, session.session_id)
+
+    assert exc.value.code == "not_found"
+
+
+def test_send_answer_last_question_ends_and_generates_report() -> None:
+    deps, calls = with_report(make_deps(scorer=fake_score))
+    session = started(deps)
+
+    ended = False
+    for _ in range(40):
+        result = send_answer(deps, VISITOR_A, session.session_id, "resposta")
+        if result.ended:
+            ended = True
+            assert result.turn is None
+            break
+
+    assert ended and calls.report == 1
+    assert deps.repo.get_session(VISITOR_A, session.session_id).status == "completed"
+    assert deps.reports.load(session.session_id)[0].overall_score == 4.0
+
+
+def test_report_failure_keeps_scoring_with_error_and_turns() -> None:
+    def broken(plan, turns):
+        raise ReportError("citação inválida")
+
+    deps, _ = with_report(make_deps(scorer=fake_score), broken)
+    session = started(deps)
+
+    with pytest.raises(ServiceError) as exc:
+        end_interview(deps, VISITOR_A, session.session_id)
+
+    assert exc.value.code == "llm_invalid_output" and exc.value.retryable is True
+    saved = deps.repo.get_session(VISITOR_A, session.session_id)
+    assert saved.status == "scoring" and saved.error == "citação inválida"
+    assert len(deps.repo.list_turns(VISITOR_A, session.session_id)) == 2
+
+
+def test_get_report_before_completed_is_invalid_state() -> None:
+    deps, _ = with_report(make_deps())
+    session = started(deps)
+
+    with pytest.raises(ServiceError) as exc:
+        get_report(deps, VISITOR_A, session.session_id)
+
+    assert exc.value.code == "invalid_state"
+
+
+def test_get_report_completed_returns_report_and_full_turns() -> None:
+    deps, _ = with_report(make_deps(scorer=fake_score))
+    session = started(deps)
+    send_answer(deps, VISITOR_A, session.session_id, "resposta")
+    end_interview(deps, VISITOR_A, session.session_id)
+
+    view = get_report(deps, VISITOR_A, session.session_id)
+
+    assert view.report.overall_score == 4.0
+    assert view.turns[0].score is not None
+    assert view.is_above_case_avg is None  # fewer than 3 completed sessions
+
+
+def test_get_report_other_visitor_is_not_found() -> None:
+    deps, _ = with_report(make_deps(scorer=fake_score))
+    session = started(deps)
+    end_interview(deps, VISITOR_A, session.session_id)
+
+    with pytest.raises(ServiceError) as exc:
+        get_report(deps, VISITOR_B, session.session_id)
+
+    assert exc.value.code == "not_found"
