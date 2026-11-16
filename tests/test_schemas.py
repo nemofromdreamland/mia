@@ -31,6 +31,7 @@ from mia.schemas import (
     SummaryPoint,
     ToolDecision,
     Turn,
+    Variant,
 )
 
 
@@ -629,3 +630,23 @@ def test_golden_item_accepts_human_score_limits(value: int) -> None:
 )
 def test_recruiter_session_models_round_trip_through_json(model: Any) -> None:
     assert type(model).model_validate_json(model.model_dump_json()) == model
+
+
+def test_golden_item_allows_missing_score_and_split_before_human_review() -> None:
+    fields = _golden_fields()
+    del fields["human_score"], fields["split"]
+    item = GoldenItem(**fields)
+    assert item.human_score is None
+    assert item.split is None
+
+
+def test_variant_alias_lists_the_seven_golden_variants() -> None:
+    assert get_args(Variant) == (
+        "level_5",
+        "level_4",
+        "level_3",
+        "level_2",
+        "level_1",
+        "rambling",
+        "paraphrase",
+    )

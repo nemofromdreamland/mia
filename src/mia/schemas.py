@@ -209,16 +209,19 @@ class Session(BaseModel):
 # ---------- Evaluation ----------
 
 
+Variant = Literal["level_5", "level_4", "level_3", "level_2", "level_1", "rambling", "paraphrase"]
+
+
 class GoldenItem(BaseModel):
+    """Golden set A item. human_score and split stay None until human review (task 2.3)."""
+
     item_id: str
     question: Question
     answer_text: str
-    variant: Literal[
-        "level_5", "level_4", "level_3", "level_2", "level_1", "rambling", "paraphrase"
-    ]
+    variant: Variant
     paraphrase_of: str | None
-    human_score: int = Field(ge=1, le=5)
-    split: Literal["dev", "test"]
+    human_score: int | None = Field(default=None, ge=1, le=5)
+    split: Literal["dev", "test"] | None = None
     generated_by: str
 
 

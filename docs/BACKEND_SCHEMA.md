@@ -443,8 +443,8 @@ class GoldenItem(BaseModel):
     variant: Literal["level_5", "level_4", "level_3", "level_2", "level_1",
                      "rambling", "paraphrase"]
     paraphrase_of: str | None
-    human_score: int = Field(ge=1, le=5)
-    split: Literal["dev", "test"]
+    human_score: int | None = Field(default=None, ge=1, le=5)  # None até a nota humana (2.3)
+    split: Literal["dev", "test"] | None = None                # None até a 2.3
     generated_by: str
 ```
 
