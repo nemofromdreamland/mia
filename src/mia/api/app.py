@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 
 from mia.api.errors import register_error_handlers
+from mia.api.rest import router as rest_router
 from mia.service import ServiceDeps
 
 
@@ -11,6 +12,7 @@ def create_app(deps: ServiceDeps) -> FastAPI:
     app = FastAPI(title="MIA")
     app.state.deps = deps
     register_error_handlers(app)
+    app.include_router(rest_router)
 
     @app.get("/ping")
     def ping() -> dict[str, str]:

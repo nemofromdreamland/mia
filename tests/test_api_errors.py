@@ -1,10 +1,10 @@
 """Tests for the API skeleton: /ping, the single error format and X-Visitor-Id parsing."""
 
 import pytest
+from fakes_service import make_deps
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
-from test_service import make_deps
 
 from mia.api import create_app
 from mia.api.errors import HTTP_STATUS
