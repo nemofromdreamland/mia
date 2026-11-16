@@ -2,7 +2,7 @@
 
 **MIA — Mock Interview Assistant** · atualizado em 15/11/2026
 
-Documentos relacionados: [PRD](PRD.md) · [TRD](TRD.md) · [App Flow](APP_FLOW.md) · [Backend Schema](BACKEND_SCHEMA.md) · [Design](DESIGN.md) · [Casos](CASES.md)
+Documentos relacionados: [PRD](PRD.md) · [TRD](TRD.md) · [App Flow](APP_FLOW.md) · [Backend Schema](BACKEND_SCHEMA.md) · [Design](design/README.md) · [Casos](CASES.md)
 
 > **Atualização de 15/11:** a web virou uma demo pública sem login, com 5 casos prontos e uma tela do recrutador. Mudaram 0.4, 1.3, 1.9, as novas 1.11–1.12, 3.1, 3.4–3.8, 3.10–3.11, 4.1–4.2, 4.5–4.7, 5.5, 6.3 e a ordem de cortes.
 
@@ -115,9 +115,9 @@ Objetivo: o fluxo do App Flow funcionando localmente, da escolha do caso ao rela
 | 3.3 | Repositório DynamoDB (`mia-sessions`, `mia-turns`) com `UpdateItem` condicionado ao status | Agente | `src/mia/repo_dynamo.py` | Testes com moto ou tabelas reais de dev |
 | 3.4 | Visitante anônimo + cotas: valida `X-Visitor-Id` (UUID v4), `quotas.py` (5/visitante/dia e 100/dia global em `mia-meta`, contador atômico) e kill switch `config/demo.open` | Agente | `src/mia/api/visitor.py`, `src/mia/quotas.py` | Header inválido → `invalid_input`; 6ª sessão → `quota_exceeded`; demo fechada → `demo_paused`; `visitor_id` nunca do corpo |
 | 3.5 | `create_session {case_id, mode}`: copia triagem e plano do caso, sessão nasce `ready` e responde 201 sem chamar modelo; `candidate_no` sequencial por caso | Agente | `service.py` | Teste confirma 0 chamadas ao LLM e `candidate_no` sem repetição |
-| 3.6 | Frontend React + Vite seguindo o `DESIGN.md` (seção 14, blocos 0–6): fundação, Início (casos + histórico), Preparo, Entrevista, Relatório, Recrutador, Candidato | Agente | `frontend/` | As 6 telas navegam com o backend local e cumprem o "Pronto quando" da seção 14 do `DESIGN.md` |
-| 3.7 | Estados vazios, carregamento e erros do App Flow, com as mensagens da seção 10 do `DESIGN.md` | Agente | `frontend/` | Cada linha da seção 10.2 do `DESIGN.md` tem tela |
-| 3.8 | Teste E2E mínimo com Playwright: escolher caso → 2 respostas → encerrar → relatório → tela do recrutador, usando os `data-testid` da seção 14 do `DESIGN.md` | Agente | `frontend/e2e/` | Passa localmente com modelo barato |
+| 3.6 | Frontend React + Vite seguindo o Design (`docs/design/`) (seção 14, blocos 0–6): fundação, Início (casos + histórico), Preparo, Entrevista, Relatório, Recrutador, Candidato | Agente | `frontend/` | As 6 telas navegam com o backend local e cumprem o "Pronto quando" da seção 14 do Design (`docs/design/`) |
+| 3.7 | Estados vazios, carregamento e erros do App Flow, com as mensagens da seção 10 do Design (`docs/design/`) | Agente | `frontend/` | Cada linha da seção 10.2 do Design (`docs/design/`) tem tela |
+| 3.8 | Teste E2E mínimo com Playwright: escolher caso → 2 respostas → encerrar → relatório → tela do recrutador, usando os `data-testid` da seção 14 do Design (`docs/design/`) | Agente | `frontend/e2e/` | Passa localmente com modelo barato |
 | 3.9 | Container ARM64 do backend (AgentCore exige ARM64; confirmar no Gate 0) | Agente | `Dockerfile` | `docker run` local responde em `/ping` e `/invocations` |
 | 3.10 | `recruiter.py`: média do caso (só com ≥ 3 concluídas, via GSI `by_case`), filtro acima da média, `delta_vs_case_avg`, `is_above_case_avg` no relatório | Agente | `src/mia/recruiter.py` + testes | Testes com 0, 2, 3 e 10 sessões; nenhum campo do visitante na resposta |
 | 3.11 | Lambda proxy: rota REST → `action`, valida `X-Visitor-Id`, chama o AgentCore com SigV4 | Agente | `proxy/handler.py` + testes | Teste local com evento do API Gateway gera a chamada certa ao AgentCore (mock) |
@@ -149,7 +149,7 @@ Só começa se o Gate 0 aprovou o Sonic e a Fase 4 está no ar. Se a URL de voz 
 | 5.1 | Cliente do Nova 2 Sonic adaptado do exemplo oficial: sessão, prompt do entrevistador, voz em português | Agente | `src/mia/voice/sonic.py` | Conversa local pelo terminal funciona |
 | 5.2 | Ligar as ferramentas do `interviewer.py` ao Sonic; `score_answer` em segundo plano | Agente | `src/mia/voice/tools.py` | Entrevista por voz segue o plano e grava turnos em texto |
 | 5.3 | Endpoint WebSocket `/ws` com o protocolo de eventos do Backend Schema | Agente | `src/mia/api/ws.py` | Script de teste troca eventos e recebe `transcript` |
-| 5.4 | Front: captura PCM 16 kHz (AudioWorklet), reprodução, interrupção, transcrição ao vivo, fallback para texto (estados da seção 8 do `DESIGN.md`) | Agente | `frontend/src/voice/` | Conversa no navegador com fone |
+| 5.4 | Front: captura PCM 16 kHz (AudioWorklet), reprodução, interrupção, transcrição ao vivo, fallback para texto (estados da seção 8 do Design (`docs/design/`)) | Agente | `frontend/src/voice/` | Conversa no navegador com fone |
 | 5.5 | Rota `POST /sessions/{id}/voice-url` no proxy: confere o `visitor_id` dono da sessão e devolve a URL SigV4 do WebSocket (5 min) | Agente | `proxy/handler.py`, `infra/api.tf` | Front conecta em produção |
 | 5.6 | Gravação da demo de voz | **Você** | Vídeo | Gravado antes de a conta fechar |
 

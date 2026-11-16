@@ -2,7 +2,7 @@
 
 **MIA — Mock Interview Assistant** · atualizado em 15/11/2026
 
-Documentos relacionados: [PRD](PRD.md) · [TRD](TRD.md) · [App Flow](APP_FLOW.md) · [Design](DESIGN.md) · [Casos](CASES.md)
+Documentos relacionados: [PRD](PRD.md) · [TRD](TRD.md) · [App Flow](APP_FLOW.md) · [Design](design/README.md) · [Casos](CASES.md)
 
 ## Visão geral
 

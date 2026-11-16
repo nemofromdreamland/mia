@@ -2,7 +2,7 @@
 
 **MIA — Mock Interview Assistant** · atualizado em 15/11/2026
 
-Documentos relacionados: [PRD](PRD.md) · [TRD](TRD.md) · [Backend Schema](BACKEND_SCHEMA.md) · [Design](DESIGN.md) · [Casos](CASES.md)
+Documentos relacionados: [PRD](PRD.md) · [TRD](TRD.md) · [Backend Schema](BACKEND_SCHEMA.md) · [Design](design/README.md) · [Casos](CASES.md)
 
 A web é uma demo pública sem login. Quem chega pode fazer dois papéis: **candidato** (escolhe um caso e faz a entrevista) ou **recrutador** (vê quem ficou acima da média de cada caso). O fluxo com CV avulso (fictício) existe só na CLI local.
 

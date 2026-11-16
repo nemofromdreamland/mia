@@ -6,16 +6,18 @@ Este arquivo vale para qualquer agente de código usado no projeto (Claude Code 
 
 ## Fonte da verdade
 
-Leia antes de qualquer tarefa. Em conflito, vale a ordem abaixo:
+Consulte **sob demanda**: não leia os documentos inteiros. Ache a seção com `grep -n '^#' <arquivo>` e leia só o trecho que a tarefa usa. Em conflito, vale a ordem abaixo:
 
 1. `specs/<id>-*.md` — spec aprovada da tarefa atual
 2. `docs/BACKEND_SCHEMA.md` — schemas, tabelas, API, erros
 3. `docs/TRD.md` — arquitetura, stack, segurança, infra
 4. `docs/APP_FLOW.md` — telas e fluxos
 5. `docs/CASES.md` — os 5 casos prontos e como gerar os fixtures
-6. `docs/DESIGN.md` — visual, componentes, microcopy, acessibilidade do frontend (seção 14 = ordem de implementação)
+6. `docs/design/` — visual, componentes, microcopy, acessibilidade do frontend (`README.md` = índice + ordem de implementação; abra só o arquivo da seção)
 7. `docs/PRD.md` — escopo e requisitos de produto
 8. `docs/IMPLEMENTATION_PLAN.md` — ordem das tarefas e critérios "Pronto quando"
+
+`docs/archive/` e as seções "Verificação" de specs concluídas não são fonte da verdade: não leia.
 
 Se algo não estiver nos documentos, pergunte. Não invente requisito.
 
@@ -26,6 +28,7 @@ Cada tarefa do Implementation Plan segue: **spec** (com passos) → revisão hum
 - Claude Code: `/spec 1.4`, `/implement 1.4`, `/verify 1.4` (skills em `.claude/skills/`).
 - Codex: `$spec 1.4`, `$implement 1.4`, `$verify 1.4` (skills em `.agents/skills/`).
 - As skills dos dois agentes têm o mesmo conteúdo. Ao mudar uma, mude a outra.
+- Tamanho das tarefas (P/M/G), limites por passo e formato da explicação estão nas skills `spec` e `implement`.
 
 Regras:
 
@@ -34,41 +37,8 @@ Regras:
 - Testes primeiro: escreva os testes da spec, veja falhar, depois implemente.
 - Se a spec estiver ambígua ou errada, pare e pergunte; não decida sozinho.
 - Uma tarefa pode ser implementada por um agente e verificada pelo outro; a spec é o contrato entre eles.
-
-## Ritmo de trabalho: passos do tamanho da tarefa, sempre explicados
-
-O dono do projeto é júnior e precisa entender e defender cada linha numa entrevista técnica. Por isso, nunca implemente uma tarefa inteira de uma vez sem parar para explicar.
-
-1. **Toda spec estima o tamanho da tarefa** (campo `tamanho` do template) e quebra a tarefa em passos de acordo com ele:
-
-   | Tamanho | Exemplos | Passos | Cada passo |
-   | --- | --- | --- | --- |
-   | P (pequena) | configuração, esqueleto, ajuste pontual | 1 a 2 | até ~5 arquivos, ~200 linhas de diff |
-   | M (média) | um módulo com testes (`pii.py`, `judge.py`) | 2 a 4 | até ~5 arquivos, ~300 linhas de diff |
-   | G (grande) | grafo, API, tela com vários estados | 4 a 6 | até ~5 arquivos, ~300 linhas de diff |
-
-2. **Cada passo é uma entrega coerente:** um conjunto de comportamentos relacionados e testáveis, cerca de 30 a 60 minutos. Ao terminar, os testes passam e o projeto roda.
-3. **Um passo por vez.** Ao fim de cada passo, PARE, entregue a explicação abaixo e espere o usuário dizer "próximo" (ou pedir ajuste). Não comece o passo seguinte por conta própria.
-4. **Commit por passo**, depois que o usuário confirmar: `feat(1.4.2): ...` (tarefa 1.4, passo 2).
-5. Se um passo crescer além do combinado, pare e proponha dividi-lo na spec.
-
-**Explicação obrigatória ao fim de cada passo** (em português, sem jargão sem explicar):
-
-```markdown
-### Passo N de M — <título>
-
-**Contexto:** por que este passo existe, onde ele entra no MIA e qual parte da spec/docs ele cumpre.
-
-**O que foi feito:** arquivos criados ou alterados, um por linha, com o que mudou em cada um.
-
-**Como foi feito:** as decisões e os conceitos usados. Todo termo ou padrão novo (ex.: "fixture", "Pydantic validator", "máquina de estados") ganha uma explicação de uma ou duas frases. Mostre o trecho de código mais importante, se ajudar.
-
-**Como testar você mesmo:** comandos exatos para copiar e colar (ou cliques na tela), na ordem.
-
-**O que você deve ver:** a saída ou tela esperada (com exemplo real), e como reconhecer que algo deu errado.
-
-**Próximo passo:** o que vem a seguir e por quê.
-```
+- O dono do projeto é júnior e precisa entender cada linha: um passo por vez, sempre explicado, esperando "próximo" antes de seguir. Commit por passo, depois da confirmação: `feat(1.4.2): ...` (tarefa 1.4, passo 2).
+- Não dê dicas do que falar em entrevista de emprego.
 
 ## Regras de arquitetura (não negociáveis)
 
@@ -102,7 +72,7 @@ terraform -chdir=infra plan
 - Código, nomes e commits em inglês; documentação e textos de interface em português.
 - Funções pequenas; sem dependências novas sem justificar na spec.
 - Commits pequenos, um por passo, mensagem `feat(1.4.2): ...` / `fix(...)` / `test(...)`.
-- Frontend: siga o `docs/DESIGN.md` à risca (tokens, componentes, microcopy, lista "Proibido"). Nenhuma cor, tamanho ou texto inventado.
+- Frontend: siga o `docs/design/` à risca (tokens, componentes, microcopy, lista "Proibido"). Nenhuma cor, tamanho ou texto inventado.
 
 ## Segurança
 
@@ -113,4 +83,4 @@ terraform -chdir=infra plan
 
 ## Definição de pronto
 
-Uma tarefa está pronta quando: todos os passos foram feitos e explicados, os critérios da spec estão verificados com evidência (saída de comando), `uv run pytest` e `uv run ruff check .` passam e a spec está com `status: concluída`.
+Uma tarefa está pronta quando: todos os passos foram feitos e explicados, os critérios da spec estão verificados com evidência (saída de comando, registrada em `specs/<id>-evidence.md`), `uv run pytest` e `uv run ruff check .` passam e a spec está com `status: concluída`.

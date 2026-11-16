@@ -3,8 +3,10 @@ id: X.Y
 titulo: <título curto>
 status: rascunho   # rascunho → aprovada → implementada → concluída
 depende_de: []     # ex.: [1.1, 1.2]
-tamanho: M         # P | M | G (define número e tamanho dos passos; ver AGENTS.md)
+tamanho: M         # P | M | G (define número e tamanho dos passos; ver skill spec)
 ---
+
+<!-- Limite: 15 KB. Design só com assinaturas, sem código pronto. Evidências do verify vão em specs/X.Y-evidence.md, não aqui. -->
 
 # X.Y — <título>
 
@@ -48,7 +50,7 @@ def exemplo(arg: Tipo) -> Retorno: ...
 
 ## Passos
 
-Número e tamanho dos passos conforme o `tamanho` da tarefa (tabela do "Ritmo de trabalho" no `AGENTS.md`): P = 1 a 2, M = 2 a 4, G = 4 a 6. Cada um: uma entrega coerente e testável, ~30–60 min, e termina com os testes passando.
+Número e tamanho dos passos conforme o `tamanho` da tarefa (tabela da skill `spec`): P = 1 a 2, M = 2 a 4, G = 4 a 6. Cada um: uma entrega coerente e testável, ~30–60 min, e termina com os testes passando.
 
 | # | Passo | Arquivos | Requisitos cobertos | Como o usuário testa | Status |
 | --- | --- | --- | --- | --- | --- |
@@ -66,6 +68,8 @@ Status: `pendente` → `feito` (preencha também o commit ao lado, ex.: `feito �
 ## Perguntas em aberto
 
 - <pergunta> → resposta: <preenchida na revisão>
+
+Evidências: `specs/X.Y-evidence.md` (preenchido no verify)
 
 ## Notas de implementação
 

@@ -2,7 +2,7 @@
 
 **MIA — Mock Interview Assistant** · Documento de requisitos de produto · atualizado em 15/11/2026
 
-Documentos relacionados: [TRD](TRD.md) · [App Flow](APP_FLOW.md) · [Backend Schema](BACKEND_SCHEMA.md) · [Design](DESIGN.md) · [Casos](CASES.md)
+Documentos relacionados: [TRD](TRD.md) · [App Flow](APP_FLOW.md) · [Backend Schema](BACKEND_SCHEMA.md) · [Design](design/README.md) · [Casos](CASES.md)
 
 ## Visão geral
 

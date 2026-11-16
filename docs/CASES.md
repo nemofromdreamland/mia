@@ -2,7 +2,7 @@
 
 **MIA — Mock Interview Assistant** · 15/11/2026
 
-Documentos relacionados: [PRD](PRD.md) · [TRD](TRD.md) · [Backend Schema](BACKEND_SCHEMA.md) · [Design](DESIGN.md)
+Documentos relacionados: [PRD](PRD.md) · [TRD](TRD.md) · [Backend Schema](BACKEND_SCHEMA.md) · [Design](design/README.md)
 
 ## Por que casos prontos
 
