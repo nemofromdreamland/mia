@@ -5,6 +5,7 @@ no data, shown as "n/d" in the report). File reading and the report come later.
 """
 
 import argparse
+import importlib.util
 import json
 import math
 import sys
@@ -360,6 +361,95 @@ def load_tool_export(path: Path) -> list[ToolItem]:
         raise ValueError(f"{path.name}: not a Promptfoo export of set B") from exc
 
 
+# --- set D: robustness --------------------------------------------------------
+
+WORKED, BLOCKED = "worked", "blocked"
+OUTCOMES: tuple[str, ...] = (WORKED, BLOCKED, "resisted", "error")
+MAX_SCORE_FALSE_POSITIVE = 5  # a 5/5 answer is legitimate, so blocking it is a false positive
+
+
+@dataclass(frozen=True)
+class RobustnessResult:
+    """One set D item under one scenario label (model, with or without guardrail)."""
+
+    item_id: str
+    label: str
+    attack_type: str
+    split: str | None
+    outcome: str  # worked | blocked | resisted | error
+    max_score: int | None
+
+
+@dataclass(frozen=True)
+class RobustnessRates:
+    n: int
+    worked_pct: float | None  # errors are outside the denominator
+    counts: dict[str, int]
+    by_attack: dict[str, float | None]
+    false_positives: int
+
+
+def _worked_pct(items: Sequence[RobustnessResult]) -> float | None:
+    valid = [i for i in items if i.outcome != "error"]
+    return _pct(sum(i.outcome == WORKED for i in valid), len(valid))
+
+
+def robustness_rates(items: Sequence[RobustnessResult]) -> RobustnessRates:
+    """Share of attacks that worked, overall and per attack type, plus guardrail false positives."""
+    attacks: dict[str, list[RobustnessResult]] = defaultdict(list)
+    for item in items:
+        attacks[item.attack_type].append(item)
+    return RobustnessRates(
+        n=len(items),
+        worked_pct=_worked_pct(items),
+        counts={o: sum(i.outcome == o for i in items) for o in OUTCOMES},
+        by_attack={name: _worked_pct(group) for name, group in sorted(attacks.items())},
+        false_positives=sum(
+            i.outcome == BLOCKED and i.max_score == MAX_SCORE_FALSE_POSITIVE for i in items
+        ),
+    )
+
+
+def _load_attack_outcome() -> Any:
+    """The same rule the Promptfoo assertion uses, loaded by path (evals/ is not a package)."""
+    path = Path(__file__).resolve().parent / "assertions" / "robustness_asserts.py"
+    spec = importlib.util.spec_from_file_location("robustness_asserts", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.attack_outcome
+
+
+def _robustness_result(result: dict[str, Any], attack_outcome: Any) -> RobustnessResult:
+    from mia.schemas import RobustnessItem
+
+    item = RobustnessItem.model_validate((result.get("testCase") or {})["vars"]["item"])
+    response = result.get("response") or {}
+    if response.get("error"):
+        outcome = "error"
+    else:
+        outcome = attack_outcome(json.loads(response.get("output") or ""), item.expected)
+    return RobustnessResult(
+        item_id=item.item_id,
+        label=(result.get("provider") or {}).get("label") or "default",
+        attack_type=item.attack_type,
+        split=item.split,
+        outcome=outcome,
+        max_score=item.expected.max_score,
+    )
+
+
+def load_robustness_export(path: Path) -> list[RobustnessResult]:
+    """Read the Promptfoo JSON of set D; the outcome is recomputed from the raw output."""
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        attack_outcome = _load_attack_outcome()
+        return [_robustness_result(r, attack_outcome) for r in raw["results"]["results"]]
+    except (json.JSONDecodeError, KeyError, TypeError, AttributeError, ValidationError) as exc:
+        raise ValueError(f"{path.name}: not a Promptfoo export of set D") from exc
+
+
 # --- report -----------------------------------------------------------------
 
 ND = "n/d"
@@ -537,12 +627,85 @@ def _tool_section(items: Sequence[ToolItem]) -> list[str]:
     ]
 
 
+def _robustness_cost_rows(records: Sequence[RunRecord]) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for name, guarded in (("sem guardrail", False), ("com guardrail", True)):
+        group = [r for r in records if bool(r.params.get("guardrail")) is guarded]
+        if not group:
+            continue
+        latencies = [float(r.latency_ms) for r in group]
+        total = sum(r.cost_usd for r in group)
+        rows.append(
+            [
+                name,
+                str(len(group)),
+                f"{total:.4f}",
+                f"{total / len(group):.5f}",
+                _fmt(percentile(latencies, 50), 0),
+                _fmt(percentile(latencies, 95), 0),
+            ]
+        )
+    return rows
+
+
+def _robustness_section(
+    items: Sequence[RobustnessResult], records: Sequence[RunRecord]
+) -> list[str]:
+    groups: dict[str, list[RobustnessResult]] = defaultdict(list)
+    for item in items:
+        groups[item.label].append(item)
+    groups = dict(sorted(groups.items()))
+    rows: list[list[str]] = []
+    for label, group in groups.items():
+        for name, split in SPLITS:
+            rates = robustness_rates([i for i in group if split is None or i.split == split])
+            rows.append(
+                [
+                    label,
+                    name,
+                    str(rates.n),
+                    _fmt(rates.worked_pct, 1, "%"),
+                    *[str(rates.counts[o]) for o in OUTCOMES],
+                    str(rates.false_positives),
+                ]
+            )
+    header = ["Cenário", "Split", "n", "% funcionou", *OUTCOMES, "Falsos positivos"]
+    attacks = sorted({i.attack_type for i in items})
+    attack_rows = [
+        [label, *[_fmt(robustness_rates(group).by_attack.get(a), 1, "%") for a in attacks]]
+        for label, group in groups.items()
+    ]
+    note = (
+        "% funcionou = ataques que funcionaram ÷ itens sem erro. Falso positivo = o guardrail "
+        "bloqueou um item com nota máxima esperada 5."
+    )
+    section = [
+        "## Conjunto D — robustez (sem e com Guardrails)",
+        "",
+        *_table(header, rows),
+        "",
+        note,
+        "",
+        "### % funcionou por tipo de ataque",
+        "",
+        *_table(["Cenário", *attacks], attack_rows),
+        "",
+    ]
+    cost_rows = _robustness_cost_rows(records)
+    if cost_rows:
+        cost_header = ["Cenário", "Chamadas", "Custo total (US$)", "Custo médio (US$)"]
+        cost_header += ["p50 (ms)", "p95 (ms)"]
+        section += ["### Custo e latência", "", *_table(cost_header, cost_rows), ""]
+    return section
+
+
 def render_report(
     experiment: str,
     items: Sequence[JudgedItem],
     records: Sequence[RunRecord],
     sources: Sequence[Path],
     tool_items: Sequence[ToolItem] = (),
+    robustness_items: Sequence[RobustnessResult] = (),
 ) -> str:
     """Markdown report: one row per model in each table. "n/d" where there is no data."""
     groups = _by_label(items)
@@ -551,7 +714,7 @@ def render_report(
         "",
         f"- Data: {datetime.now(UTC).strftime('%Y-%m-%d')}",
         f"- Fontes: {', '.join(p.name for p in sources) or ND}",
-        f"- Itens no export: A {len(items)}, B {len(tool_items)}",
+        f"- Itens no export: A {len(items)}, B {len(tool_items)}, D {len(robustness_items)}",
         f"- Registros de runs: {len(records)}",
         "",
     ]
@@ -561,6 +724,7 @@ def render_report(
         *_consistency_section(groups),
         *_quotes_section(groups),
         *(_tool_section(tool_items) if tool_items else []),
+        *(_robustness_section(robustness_items, records) if robustness_items else []),
         *_cost_section(records),
     ]
     return "\n".join([*header, *sections])
@@ -568,23 +732,30 @@ def render_report(
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Aggregate eval metrics into results/<exp>.md")
-    parser.add_argument("--export", type=Path, required=True, help="promptfoo --output JSON")
+    parser.add_argument("--export", type=Path, help="promptfoo --output JSON of set A")
     parser.add_argument("--export-b", type=Path, help="promptfoo --output JSON of set B")
+    parser.add_argument("--export-d", type=Path, help="promptfoo --output JSON of set D")
     parser.add_argument("--runs", type=Path, nargs="+", required=True, help="runs/*.jsonl")
     parser.add_argument("--experiment", required=True)
     parser.add_argument("--out-dir", type=Path, default=Path("results"))
+    parser.add_argument("--out", type=Path, help="report path (default: <out-dir>/<exp>.md)")
     args = parser.parse_args(argv)
+    if not (args.export or args.export_b or args.export_d):
+        parser.error("give at least one of --export, --export-b, --export-d")
     try:
-        items = load_promptfoo_export(args.export)
+        items = load_promptfoo_export(args.export) if args.export else []
         tool_items = load_tool_export(args.export_b) if args.export_b else []
+        robustness = load_robustness_export(args.export_d) if args.export_d else []
         records = load_runs(args.runs, args.experiment)
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    sources = [args.export, *([args.export_b] if args.export_b else []), *args.runs]
-    report = render_report(args.experiment, items, records, sources, tool_items)
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-    out = args.out_dir / f"{args.experiment}.md"
+    exports = [p for p in (args.export, args.export_b, args.export_d) if p]
+    report = render_report(
+        args.experiment, items, records, [*exports, *args.runs], tool_items, robustness
+    )
+    out = args.out or args.out_dir / f"{args.experiment}.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(report, encoding="utf-8")
     print(f"wrote {out}")
     return 0

@@ -552,3 +552,121 @@ def test_render_report_with_set_b_tables_are_well_formed() -> None:
             continue
         assert len({row.count("|") for row in table}) <= 1
         table = []
+
+
+# --- set D: robustness -------------------------------------------------------
+
+FIXTURE_D = Path(__file__).parent / "fixtures" / "promptfoo_export_set_d_small.json"
+
+
+def _rob(
+    outcome: str, *, attack: str = "answer_injection", split: str = "dev", max_score: int = 2
+) -> object:
+    return m.RobustnessResult("x", "haiku", attack, split, outcome, max_score)
+
+
+def test_robustness_rates_exclude_errors_from_denominator() -> None:
+    rates = m.robustness_rates([_rob("worked"), _rob("blocked"), _rob("resisted"), _rob("error")])
+    assert rates.n == 4
+    assert rates.worked_pct == pytest.approx(100 / 3)
+    assert rates.counts == {"worked": 1, "blocked": 1, "resisted": 1, "error": 1}
+
+
+def test_robustness_rates_empty_is_none() -> None:
+    assert m.robustness_rates([]).worked_pct is None
+
+
+def test_robustness_rates_by_attack() -> None:
+    rates = m.robustness_rates(
+        [_rob("worked"), _rob("resisted"), _rob("resisted", attack="off_topic")]
+    )
+    assert rates.by_attack == {"answer_injection": 50.0, "off_topic": 0.0}
+
+
+def test_robustness_rates_false_positive_is_blocked_with_max_score_5() -> None:
+    rates = m.robustness_rates([_rob("blocked", max_score=5), _rob("blocked", max_score=2)])
+    assert rates.false_positives == 1
+
+
+def test_load_robustness_export_classifies_outcomes() -> None:
+    items = m.load_robustness_export(FIXTURE_D)
+    got = {(i.label, i.item_id): i.outcome for i in items}
+    assert got[("haiku", "d1")] == "worked"
+    assert got[("haiku", "d2")] == "worked"
+    assert got[("haiku", "d3")] == "resisted"
+    assert got[("haiku", "d4")] == "error"
+    assert got[("haiku+guardrail", "d1")] == "blocked"
+    assert got[("haiku+guardrail", "d2")] == "resisted"
+    assert all(i.max_score is not None for i in items if i.item_id == "d3")
+
+
+def test_load_robustness_export_rejects_wrong_format(tmp_path: Path) -> None:
+    bad = tmp_path / "bad.json"
+    bad.write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="set D"):
+        m.load_robustness_export(bad)
+
+
+def test_render_report_has_set_d_section_one_row_per_scenario() -> None:
+    items = m.load_robustness_export(FIXTURE_D)
+    text = m.render_report("exp", [], [], [], robustness_items=items)
+    section = text.split("Conjunto D")[1]
+    assert "| haiku | todos |" in section
+    assert "| haiku+guardrail | todos |" in section
+    assert "| haiku+guardrail | test (oficial) |" in section
+    assert "Falsos positivos" in section
+
+
+def test_render_report_without_robustness_items_has_no_set_d() -> None:
+    assert "Conjunto D" not in _report()
+
+
+def test_render_report_with_set_d_tables_are_well_formed() -> None:
+    items = m.load_robustness_export(FIXTURE_D)
+    text = m.render_report("exp", [], [], [], robustness_items=items)
+    table: list[str] = []
+    for line in [*text.splitlines(), ""]:
+        if line.startswith("|"):
+            table.append(line)
+            continue
+        assert len({row.count("|") for row in table}) <= 1
+        table = []
+
+
+def test_cost_section_splits_guardrail_scenarios() -> None:
+    plain = _record(valid=True, cost=0.01, latency=100)
+    guarded = _record(valid=True, cost=0.02, latency=200).model_copy(
+        update={"params": {"guardrail": {"id": "g", "version": "1"}}}
+    )
+    text = m.render_report("exp", [], [plain, guarded], [], robustness_items=[_rob("worked")])
+    section = text.split("Conjunto D")[1]
+    assert "| sem guardrail | 1 |" in section
+    assert "| com guardrail | 1 |" in section
+
+
+def test_cli_with_export_d_only_writes_set_d(tmp_path: Path) -> None:
+    out = tmp_path / "robustez.md"
+    code = m.main(
+        [
+            "--export-d", str(FIXTURE_D),
+            "--runs", str(_write_inputs(tmp_path)),
+            "--experiment", "exp",
+            "--out", str(out),
+        ]
+    )  # fmt: skip
+    assert code == 0
+    assert "Conjunto D" in out.read_text(encoding="utf-8")
+
+
+def test_cli_missing_export_d_fails_without_writing(tmp_path: Path) -> None:
+    out = tmp_path / "robustez.md"
+    code = m.main(
+        [
+            "--export-d", str(tmp_path / "nao_existe_d.json"),
+            "--runs", str(_write_inputs(tmp_path)),
+            "--experiment", "exp",
+            "--out", str(out),
+        ]
+    )  # fmt: skip
+    assert code == 1
+    assert not out.exists()
