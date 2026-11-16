@@ -28,7 +28,7 @@ QUESTIONS_PATH: Final[Path] = REPO_ROOT / "evals" / "datasets" / "questions.yaml
 OUTPUT_PATH: Final[Path] = REPO_ROOT / "evals" / "datasets" / "judge_golden.jsonl"
 EXPERIMENT: Final = "golden-2.2"
 PROMPT_NAME: Final = "synthetic_candidate"
-PROMPT_VERSION: Final = 3
+PROMPT_VERSION: Final = 4
 
 # question_id -> case_id: the case whose CV gives the candidate's background (2 per case).
 QUESTION_CASE: Final[dict[str, str]] = {

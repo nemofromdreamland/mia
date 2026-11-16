@@ -53,6 +53,14 @@ def test_no_prompt_runs_on_gemini_by_default() -> None:
     assert not on_gemini, f"Gemini is only for the provider comparison (task 6.1): {on_gemini}"
 
 
+def test_latest_synthetic_candidate_declares_the_model_it_runs_on() -> None:
+    real = load_models_config()
+    name = "synthetic_candidate"
+    version = max(available_versions(name))
+    prompt = load_prompt(name, version, models=real)
+    assert prompt.model == resolve_prompt_model(prompt, real).ref
+
+
 def test_new_prompt_versions_declare_the_model_they_run_on() -> None:
     real = load_models_config()
     stale = []
