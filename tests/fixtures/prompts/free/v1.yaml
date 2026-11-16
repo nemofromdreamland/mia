@@ -1,0 +1,7 @@
+# Test-only prompt with free-text output (no output_schema).
+name: free
+version: 1
+model: "groq:openai/test-oss"
+params: {}
+system: Você é um entrevistador cordial.
+user: "{message}"
