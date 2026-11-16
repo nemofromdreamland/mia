@@ -10,6 +10,7 @@ providers:
     label: judge-default-route   # no config.model -> prompt_models.judge in config/models.yaml
     config:
       experiment: promptfoo_set_a
+      pythonExecutable: .venv/Scripts/python.exe
       # model: "bedrock:<model_id>"   # add another provider entry with a model for 2.7
 
 tests: file://tests_set_a.py:generate_tests   # all 70 items; pass config {split: dev|test} to filter

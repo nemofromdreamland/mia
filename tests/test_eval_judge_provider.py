@@ -2,6 +2,9 @@
 
 import importlib.util
 import json
+import os
+import shutil
+import subprocess
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -175,3 +178,27 @@ def test_generate_tests_filters_by_split() -> None:
     assert len(tests) == 21
     assert {t["vars"]["item"]["split"] for t in tests} == {"test"}
     assert len(tests_set_a.generate_tests({"split": "all"})) == 70
+
+
+def test_promptfoo_python_can_load_eval_modules() -> None:
+    venv_dir = (ROOT / ".venv").resolve()
+    external_path = os.pathsep.join(
+        entry
+        for entry in os.environ["PATH"].split(os.pathsep)
+        if venv_dir not in Path(entry).resolve().parents and Path(entry).resolve() != venv_dir
+    )
+    python = shutil.which("python", path=external_path)
+    assert python is not None
+    code = (
+        "import runpy; "
+        "runpy.run_path('evals/tests_set_a.py'); "
+        "runpy.run_path('evals/assertions/judge_asserts.py')"
+    )
+    result = subprocess.run(
+        [python, "-c", code],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr

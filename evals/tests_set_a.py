@@ -1,9 +1,21 @@
 """Promptfoo test generator for set A: one test per item of judge_golden.jsonl."""
 
+import os
+import sys
 from pathlib import Path
 from typing import Any, Final
 
-from mia.schemas import GoldenItem
+
+def _ensure_project_python() -> None:
+    root = Path(__file__).resolve().parents[1]
+    executable = root / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if executable.exists() and Path(sys.executable).resolve() != executable.resolve():
+        os.execv(executable, [str(executable), *sys.argv])
+
+
+_ensure_project_python()
+
+from mia.schemas import GoldenItem  # noqa: E402 - interpreter guard must run first
 
 GOLDEN_PATH: Final = Path(__file__).resolve().parent / "datasets" / "judge_golden.jsonl"
 

@@ -6,11 +6,24 @@ whose ``vars["item"]`` is the GoldenItem of the test. Each returns a GradingResu
 """
 
 import json
+import os
+import sys
+from pathlib import Path
 from typing import Any
 
-from pydantic import ValidationError
 
-from mia.schemas import AnswerScore
+def _ensure_project_python() -> None:
+    root = Path(__file__).resolve().parents[2]
+    executable = root / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if executable.exists() and Path(sys.executable).resolve() != executable.resolve():
+        os.execv(executable, [str(executable), *sys.argv])
+
+
+_ensure_project_python()
+
+from pydantic import ValidationError  # noqa: E402 - interpreter guard must run first
+
+from mia.schemas import AnswerScore  # noqa: E402 - interpreter guard must run first
 
 GradingResult = dict[str, Any]
 
