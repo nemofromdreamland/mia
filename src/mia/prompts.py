@@ -10,9 +10,19 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from langchain_core.language_models import BaseChatModel
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
 from mia import schemas
+from mia.llm import (
+    DEFAULT_RUNS_DIR,
+    ModelConfigError,
+    ModelsConfig,
+    ModelSpec,
+    invoke,
+    load_models_config,
+    resolve_model,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROMPTS_DIR = REPO_ROOT / "prompts"
@@ -115,6 +125,13 @@ def _check_consistency(spec: _PromptFile, name: str, version: int, path: Path) -
         raise PromptError(f"{path}: changelog: required from version 2 on")
 
 
+def _check_model(ref: str, models: ModelsConfig, path: Path) -> None:
+    try:
+        resolve_model(ref, models)
+    except ModelConfigError as exc:
+        raise PromptError(f"{path}: model: {exc}") from exc
+
+
 def _template_variables(path: Path, field: str, template: str) -> set[str]:
     """Placeholder names in a template. Only plain {name} is allowed; {{ }} is a literal brace.
 
@@ -142,8 +159,9 @@ def load_prompt(
     version: int,
     *,
     prompts_dir: Path = DEFAULT_PROMPTS_DIR,
+    models: ModelsConfig | None = None,
 ) -> PromptSpec:
-    """Read and validate prompts_dir/<name>/v<version>.yaml."""
+    """Read and validate prompts_dir/<name>/v<version>.yaml (models: catalog, default = config)."""
     path = prompts_dir / name / f"v{version}.yaml"
     raw = _read_yaml(path, name)
     try:
@@ -151,6 +169,7 @@ def load_prompt(
     except ValidationError as exc:
         raise PromptError(f"{path}: {_describe(exc)}") from exc
     _check_consistency(spec, name, version, path)
+    _check_model(spec.model, models or load_models_config(), path)
     variables = _template_variables(path, "system", spec.system) | _template_variables(
         path, "user", spec.user
     )
@@ -171,4 +190,49 @@ def render(prompt: PromptSpec, variables: Mapping[str, str]) -> RenderedPrompt:
     values = dict(variables)
     return RenderedPrompt(
         system=prompt.system.format_map(values), user=prompt.user.format_map(values)
+    )
+
+
+def resolve_prompt_model(
+    prompt: PromptSpec, models: ModelsConfig, override: str | None = None
+) -> ModelSpec:
+    """Model for this prompt: explicit argument > prompt_models in config > model in the YAML."""
+    ref = override or models.prompt_models.get(prompt.name) or prompt.model
+    try:
+        return resolve_model(ref, models)
+    except ModelConfigError as exc:
+        raise PromptError(f"{prompt.path}: model: {exc}") from exc
+
+
+def run_prompt(
+    prompt: PromptSpec,
+    variables: Mapping[str, str],
+    *,
+    model: str | None = None,
+    experiment: str | None = None,
+    session_id: str | None = None,
+    models: ModelsConfig | None = None,
+    runs_dir: Path = DEFAULT_RUNS_DIR,
+    chat_model: BaseChatModel | None = None,
+) -> str:
+    """Render the prompt and call llm.invoke; the RunRecord gets its name, version and params.
+
+    variables must already be PII-masked. The reply is returned as text (no validation here).
+    """
+    models = models or load_models_config()
+    rendered = render(prompt, variables)
+    spec = resolve_prompt_model(prompt, models, model)
+    return invoke(
+        prompt_name=prompt.name,
+        prompt_version=prompt.version,
+        system=rendered.system,
+        user=rendered.user,
+        input=dict(variables),
+        model=spec.ref,
+        params=prompt.params,
+        experiment=experiment,
+        session_id=session_id,
+        config=models,
+        runs_dir=runs_dir,
+        chat_model=chat_model,
     )

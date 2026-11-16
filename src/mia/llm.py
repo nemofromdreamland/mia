@@ -75,6 +75,7 @@ class ModelSpec(BaseModel):
 class ModelsConfig(BaseModel):
     default: str
     models: dict[str, ModelSpec]
+    prompt_models: dict[str, str] = Field(default_factory=dict)  # prompt name -> model ref
 
 
 def _split_ref(ref: str, where: str) -> tuple[Provider, str]:
@@ -112,6 +113,20 @@ def _parse_model(ref: Any, fields: Any, path: Path) -> ModelSpec:
         raise ModelConfigError(f"{where}: {_describe(exc)}") from exc
 
 
+def _parse_prompt_models(raw: Any, models: dict[str, ModelSpec], path: Path) -> dict[str, str]:
+    """Optional 'prompt_models:' section: prompt name -> catalog ref (per-prompt override)."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ModelConfigError(f"{path}: prompt_models must map a prompt name to a model")
+    for name, ref in raw.items():
+        if not isinstance(ref, str) or ref not in models:
+            raise ModelConfigError(
+                f"{path}: prompt_models.{name}: {ref!r} is not one of the models in the catalog"
+            )
+    return {str(name): ref for name, ref in raw.items()}
+
+
 def load_models_config(path: Path = DEFAULT_MODELS_PATH) -> ModelsConfig:
     """Read and validate the model catalog."""
     try:
@@ -128,7 +143,8 @@ def load_models_config(path: Path = DEFAULT_MODELS_PATH) -> ModelsConfig:
         raise ModelConfigError(f"{path}: default must be a 'provider:model' string")
     if default not in models:
         raise ModelConfigError(f"{path}: default {default!r} is not one of the models")
-    return ModelsConfig(default=default, models=models)
+    prompt_models = _parse_prompt_models(raw.get("prompt_models"), models, path)
+    return ModelsConfig(default=default, models=models, prompt_models=prompt_models)
 
 
 def resolve_model(ref: str | None, config: ModelsConfig) -> ModelSpec:

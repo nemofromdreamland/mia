@@ -1,7 +1,12 @@
+import json
 from pathlib import Path
 
 import pytest
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
 
+import mia.prompts as prompts_module
+from mia.llm import ModelConfigError, ModelsConfig, load_models_config
 from mia.prompts import (
     PromptError,
     PromptSpec,
@@ -9,10 +14,25 @@ from mia.prompts import (
     load_prompt,
     output_schema_class,
     render,
+    resolve_prompt_model,
+    run_prompt,
 )
 from mia.schemas import AnswerScore
 
 FIXTURE_PROMPTS = Path(__file__).parent / "fixtures" / "prompts"
+FIXTURE_MODELS = Path(__file__).parent / "fixtures" / "models.yaml"
+
+
+@pytest.fixture
+def cfg() -> ModelsConfig:
+    return load_models_config(FIXTURE_MODELS)
+
+
+@pytest.fixture(autouse=True)
+def test_catalog(monkeypatch: pytest.MonkeyPatch, cfg: ModelsConfig) -> None:
+    """load_prompt checks models against the stable test catalog, not config/models.yaml."""
+    monkeypatch.setattr(prompts_module, "load_models_config", lambda: cfg)
+
 
 VALID = """\
 name: demo
@@ -287,3 +307,113 @@ def test_render_rejects_non_str_values() -> None:
 
     with pytest.raises(PromptError, match="question"):
         render(prompt, {"question": 3, "answer": "A"})  # type: ignore[dict-item]
+
+
+# ---------- model in the file (R9) ----------
+
+
+@pytest.mark.parametrize("model", ["gemini", "nope:model", "gemini:nao-existe"])
+def test_invalid_model_is_rejected_on_load(tmp_path: Path, model: str) -> None:
+    text = VALID.replace("gemini:test-flash", model)
+
+    assert "model" in _error(tmp_path, text)
+
+
+def test_load_prompt_accepts_explicit_catalog(tmp_path: Path, cfg: ModelsConfig) -> None:
+    _write_prompt(tmp_path, "demo", 1, VALID.replace("gemini:test-flash", "groq:openai/test-oss"))
+
+    prompt = load_prompt("demo", 1, prompts_dir=tmp_path, models=cfg)
+
+    assert prompt.model == "groq:openai/test-oss"
+
+
+# ---------- model resolution (R12) ----------
+
+
+def test_resolution_order_argument_then_config_then_yaml(cfg: ModelsConfig) -> None:
+    prompt = load_prompt("demo", 1, prompts_dir=FIXTURE_PROMPTS)
+    configured = cfg.model_copy(update={"prompt_models": {"demo": "groq:openai/test-oss"}})
+
+    assert resolve_prompt_model(prompt, cfg).ref == "gemini:test-flash"
+    assert resolve_prompt_model(prompt, configured).ref == "groq:openai/test-oss"
+    explicit = resolve_prompt_model(prompt, configured, "bedrock:anthropic.claude-x-v1:0")
+    assert explicit.ref == "bedrock:anthropic.claude-x-v1:0"
+
+
+def test_resolution_rejects_model_outside_catalog(cfg: ModelsConfig) -> None:
+    prompt = load_prompt("demo", 1, prompts_dir=FIXTURE_PROMPTS)
+
+    with pytest.raises(PromptError, match="groq:nao-existe"):
+        resolve_prompt_model(prompt, cfg, "groq:nao-existe")
+
+
+def test_prompt_models_section_is_loaded_and_validated(tmp_path: Path) -> None:
+    base = FIXTURE_MODELS.read_text(encoding="utf-8")
+    path = tmp_path / "models.yaml"
+    path.write_text(base + "prompt_models:\n  judge: groq:openai/test-oss", encoding="utf-8")
+    assert load_models_config(path).prompt_models == {"judge": "groq:openai/test-oss"}
+
+    for bad in ("prompt_models:\n  judge: groq:nao-existe", "prompt_models:\n  judge: 3"):
+        path.write_text(base + bad, encoding="utf-8")
+        with pytest.raises(ModelConfigError, match="prompt_models"):
+            load_models_config(path)
+    path.write_text(base + "prompt_models: [a]", encoding="utf-8")
+    with pytest.raises(ModelConfigError, match="prompt_models"):
+        load_models_config(path)
+
+
+def test_real_models_config_still_loads() -> None:
+    assert load_models_config().prompt_models == {}
+
+
+# ---------- run_prompt (R13) ----------
+
+
+def test_run_prompt_records_prompt_name_version_model_and_params(
+    tmp_path: Path, cfg: ModelsConfig
+) -> None:
+    prompt = load_prompt("demo", 1, prompts_dir=FIXTURE_PROMPTS)
+    variables = {"question": "Q?", "answer": "A {x}"}
+    fake = GenericFakeChatModel(messages=iter([AIMessage(content="ok")]))
+
+    text = run_prompt(
+        prompt, variables, experiment="t", models=cfg, runs_dir=tmp_path, chat_model=fake
+    )
+
+    assert text == "ok"
+    (file,) = tmp_path.glob("*_t.jsonl")
+    (line,) = file.read_text(encoding="utf-8").splitlines()
+    record = json.loads(line)
+    assert record["prompt_name"] == "demo"
+    assert record["prompt_version"] == 1
+    assert record["provider"] == "gemini"
+    assert record["model"] == "test-flash"
+    assert record["params"] == {"temperature": 0.2, "max_tokens": 300}
+    assert record["input"] == variables
+
+
+def test_run_prompt_sends_rendered_messages_and_honors_model_argument(
+    tmp_path: Path, cfg: ModelsConfig
+) -> None:
+    prompt = load_prompt("demo", 1, prompts_dir=FIXTURE_PROMPTS)
+    variables = {"question": "Q?", "answer": "A"}
+    seen: list[list[str]] = []
+
+    class Spy(GenericFakeChatModel):
+        def _generate(self, messages, *args, **kwargs):  # type: ignore[no-untyped-def]
+            seen.append([str(m.content) for m in messages])
+            return super()._generate(messages, *args, **kwargs)
+
+    run_prompt(
+        prompt,
+        variables,
+        model="groq:openai/test-oss",
+        models=cfg,
+        runs_dir=tmp_path,
+        chat_model=Spy(messages=iter([AIMessage(content="ok")])),
+    )
+
+    rendered = render(prompt, variables)
+    assert seen == [[rendered.system, rendered.user]]
+    (file,) = tmp_path.glob("*.jsonl")
+    assert json.loads(file.read_text(encoding="utf-8"))["model"] == "openai/test-oss"
