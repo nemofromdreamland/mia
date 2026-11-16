@@ -209,7 +209,7 @@ def test_feliz_completo_with_pdf(tmp_path: Path) -> None:
     assert result.plan.persona == "technical"
     records = _records(tmp_path)
     assert [r["prompt_name"] for r in records] == ["screening", "planner"]
-    assert [r["prompt_version"] for r in records] == [2, 2]
+    assert [r["prompt_version"] for r in records] == [3, 2]
     assert {r["session_id"] for r in records} == {"s1"}
     assert {r["experiment"] for r in records} == {"t"}
 
@@ -270,3 +270,15 @@ def test_bad_cv_file_fails_without_calling_model(tmp_path: Path) -> None:
 def test_build_prep_graph_has_the_five_nodes() -> None:
     graph = build_prep_graph(chat_model=_fake())
     assert {"extract", "mask", "screen", "plan", "validate"} <= set(graph.get_graph().nodes)
+
+
+def test_screening_v3_is_the_prep_default_and_routes_absences_to_keywords() -> None:
+    import inspect
+
+    from mia.prompts import load_prompt
+
+    default = inspect.signature(build_prep_graph).parameters["screening_version"].default
+    assert default == 3
+    prompt = load_prompt("screening", 3)
+    assert "missing_keywords" in prompt.system
+    assert "Nunca escreva no cv_quote" in prompt.system

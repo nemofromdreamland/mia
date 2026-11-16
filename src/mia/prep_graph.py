@@ -121,7 +121,7 @@ def build_prep_graph(
     session_id: str | None = None,
     runs_dir: Path = DEFAULT_RUNS_DIR,
     chat_model: BaseChatModel | None = None,
-    screening_version: int = 2,
+    screening_version: int = 3,
     planner_version: int = 2,
 ) -> CompiledStateGraph:
     """Straight-line graph: extract -> mask -> screen -> plan -> validate."""
