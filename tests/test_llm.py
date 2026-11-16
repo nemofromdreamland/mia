@@ -11,9 +11,11 @@ from pydantic import ValidationError
 
 import mia.llm as llm
 from mia.llm import (
+    LLMInvalidOutputError,
     ModelConfigError,
     ModelsConfig,
     build_chat_model,
+    build_repair_messages,
     estimate_cost,
     hash_input,
     invoke,
@@ -702,3 +704,91 @@ def test_plain_invoke_keeps_structured_flags_none(cfg: ModelsConfig, tmp_path: P
 
     (record,) = _read_records(_today_file(tmp_path, "test"))
     assert (record.json_valid_first_try, record.repaired) == (None, None)
+
+
+# --- repair, LLMInvalidOutputError, summed usage (R2, R3, R4) -------------------
+
+
+class _RecordingModel(GenericFakeChatModel):
+    """Fake model that keeps the messages of every call."""
+
+    calls: list[list[BaseMessage]] = []
+
+    def _generate(self, messages: list[BaseMessage], *args: Any, **kwargs: Any) -> ChatResult:
+        self.calls.append(list(messages))
+        return super()._generate(messages, *args, **kwargs)
+
+
+def _recording(*replies: AIMessage) -> _RecordingModel:
+    return _RecordingModel(messages=iter(replies), calls=[])
+
+
+def test_build_repair_messages_has_four_messages_with_bad_output_and_error() -> None:
+    messages = build_repair_messages("sys", "usr", "{quebrado", "Expecting value")
+
+    assert [type(m) for m in messages] == [SystemMessage, HumanMessage, AIMessage, HumanMessage]
+    assert messages[2].content == "{quebrado"
+    assert "Expecting value" in messages[3].content
+
+
+def test_invoke_structured_repairs_broken_json_with_one_extra_call(
+    cfg: ModelsConfig, tmp_path: Path
+) -> None:
+    model = _recording(_reply("{quebrado"), _reply(VALID_SCORE))
+
+    result = _invoke_structured(cfg, tmp_path, model)
+
+    assert result.score == 4
+    assert len(model.calls) == 2
+    assert len(model.calls[1]) == 4
+    assert model.calls[1][2].content == "{quebrado"
+    (record,) = _read_records(_today_file(tmp_path, "test"))
+    assert (record.json_valid_first_try, record.repaired) == (False, True)
+    assert record.output_parsed == result.model_dump(mode="json")
+    assert record.output_raw == VALID_SCORE
+    assert record.error is None
+
+
+def test_invoke_structured_repair_message_carries_schema_error(
+    cfg: ModelsConfig, tmp_path: Path
+) -> None:
+    model = _recording(_reply('{"score": 4}'), _reply(VALID_SCORE))
+
+    _invoke_structured(cfg, tmp_path, model)
+
+    assert "criteria_met" in str(model.calls[1][3].content)
+
+
+def test_invoke_structured_gives_up_after_one_repair(cfg: ModelsConfig, tmp_path: Path) -> None:
+    model = _recording(_reply("{quebrado"), _reply("ainda ruim"))
+
+    with pytest.raises(LLMInvalidOutputError):
+        _invoke_structured(cfg, tmp_path, model)
+
+    assert len(model.calls) == 2
+    (record,) = _read_records(_today_file(tmp_path, "test"))
+    assert (record.json_valid_first_try, record.repaired) == (False, False)
+    assert record.output_parsed is None
+    assert record.output_raw == "ainda ruim"
+    assert record.error
+
+
+def test_invoke_structured_sums_tokens_and_cost_of_both_calls(
+    cfg: ModelsConfig, tmp_path: Path
+) -> None:
+    model = _fake_model(_reply("{quebrado", 10, 5), _reply(VALID_SCORE, 20, 7))
+
+    _invoke_structured(cfg, tmp_path, model)
+
+    (record,) = _read_records(_today_file(tmp_path, "test"))
+    assert (record.input_tokens, record.output_tokens) == (30, 12)
+    assert record.cost_usd == estimate_cost(resolve_model(None, cfg), 30, 12)
+
+
+def test_invoke_structured_provider_error_does_not_trigger_repair(
+    cfg: ModelsConfig, tmp_path: Path
+) -> None:
+    with pytest.raises(RuntimeError):
+        _invoke_structured(cfg, tmp_path, _FailingChatModel(messages=iter([])))
+
+    assert len(_read_records(_today_file(tmp_path, "test"))) == 1

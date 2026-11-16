@@ -10,7 +10,7 @@ import os
 import re
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast, get_args
@@ -19,7 +19,7 @@ from urllib.parse import quote, quote_plus
 import yaml
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.runnables.retry import ExponentialJitterParams
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 
@@ -302,23 +302,25 @@ def _write_success(
     *,
     spec: ModelSpec,
     record: dict[str, Any],
-    response: AIMessage,
+    responses: Sequence[AIMessage],
     latency_ms: int,
     runs_dir: Path,
     on_record: RecordObserver | None,
+    error: str | None = None,
 ) -> None:
-    usage = response.usage_metadata or {}
-    input_tokens = usage.get("input_tokens", 0)
-    output_tokens = usage.get("output_tokens", 0)
+    """Write one RunRecord for one or more calls: tokens add up, output_raw is the last text."""
+    usages = [response.usage_metadata or {} for response in responses]
+    input_tokens = sum(usage.get("input_tokens", 0) for usage in usages)
+    output_tokens = sum(usage.get("output_tokens", 0) for usage in usages)
     append_run_record(
         RunRecord(
             **record,
-            output_raw=response.text,
+            output_raw=responses[-1].text,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             latency_ms=latency_ms,
             cost_usd=estimate_cost(spec, input_tokens, output_tokens),
-            error=None,
+            error=error,
         ),
         runs_dir,
         on_record,
@@ -366,12 +368,33 @@ def invoke(
     _write_success(
         spec=spec,
         record=record,
-        response=response,
+        responses=[response],
         latency_ms=latency_ms,
         runs_dir=runs_dir,
         on_record=on_record,
     )
     return response.text
+
+
+REPAIR_INSTRUCTION = (
+    "Sua resposta anterior não é válida: {error}\n"
+    "Responda de novo apenas com o JSON corrigido, sem texto antes ou depois."
+)
+
+
+def build_repair_messages(system: str, user: str, bad_output: str, error: str) -> list[BaseMessage]:
+    """Original conversation + the invalid answer + a fixed request to fix it."""
+    return [
+        SystemMessage(system),
+        HumanMessage(user),
+        AIMessage(bad_output),
+        HumanMessage(REPAIR_INSTRUCTION.format(error=error)),
+    ]
+
+
+def _parse_error(exc: ValueError) -> str:
+    """Short text for the repair request: Pydantic errors as 'loc: msg', json errors as-is."""
+    return _describe(exc) if isinstance(exc, ValidationError) else str(exc)
 
 
 def invoke_structured[T: BaseModel](
@@ -393,8 +416,9 @@ def invoke_structured[T: BaseModel](
 ) -> T:
     """Like ``invoke`` but validates the answer against ``output_schema``.
 
-    Step 2: happy path only; invalid output still propagates the parse error
-    (the single repair attempt and LLMInvalidOutputError arrive in step 3).
+    Invalid output gets exactly one repair call; if that fails too, a single RunRecord
+    with the error is written and LLMInvalidOutputError is raised. Provider failures
+    are never repaired. Tokens, cost and latency of both calls are summed in one record.
     """
     spec, params, runnable = _start(
         model=model, params=params, config=config, chat_model=chat_model
@@ -410,16 +434,42 @@ def invoke_structured[T: BaseModel](
         experiment=experiment,
         session_id=session_id,
     )
-    messages = [SystemMessage(system), HumanMessage(user)]
+    messages: list[BaseMessage] = [SystemMessage(system), HumanMessage(user)]
     response, latency_ms = _call(runnable, messages, record, runs_dir, on_record)
-    parsed = parse_structured(response.text, output_schema)
+    responses = [response]
+    first_try = True
+    try:
+        parsed = parse_structured(response.text, output_schema)
+    except ValueError as exc:  # json errors and pydantic ValidationError
+        first_try = False
+        repair = build_repair_messages(system, user, response.text, _parse_error(exc))
+        response, repair_ms = _call(runnable, repair, record, runs_dir, on_record)
+        responses.append(response)
+        latency_ms += repair_ms
+        try:
+            parsed = parse_structured(response.text, output_schema)
+        except ValueError as repair_exc:
+            record.update(json_valid_first_try=False, repaired=False)
+            message = f"LLMInvalidOutputError: {_parse_error(repair_exc)}"
+            _write_success(
+                spec=spec,
+                record=record,
+                responses=responses,
+                latency_ms=latency_ms,
+                runs_dir=runs_dir,
+                on_record=on_record,
+                error=redact_secrets(message),
+            )
+            raise LLMInvalidOutputError(message) from repair_exc
     record.update(
-        output_parsed=parsed.model_dump(mode="json"), json_valid_first_try=True, repaired=False
+        output_parsed=parsed.model_dump(mode="json"),
+        json_valid_first_try=first_try,
+        repaired=not first_try,
     )
     _write_success(
         spec=spec,
         record=record,
-        response=response,
+        responses=responses,
         latency_ms=latency_ms,
         runs_dir=runs_dir,
         on_record=on_record,
