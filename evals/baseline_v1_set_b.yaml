@@ -1,0 +1,30 @@
+# Baseline v1, set B (follow_up) through Promptfoo. The real prompt lives in
+# prompts/follow_up/v<N>.yaml and is loaded by mia.interviewer; "prompt" below is only a marker.
+# Step 2: Haiku only. Step 4 adds the other two models (one provider per model).
+description: "MIA baseline v1 - set B (follow_up tool decision)"
+
+prompts:
+  - "{{item_id}}"
+
+providers:
+  - id: file://providers/follow_up_provider.py
+    label: us.anthropic.claude-haiku-4-5-20251001-v1:0
+    config:
+      model: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+      experiment: baseline_v1_set_b
+      pythonExecutable: .venv/Scripts/python.exe
+
+tests: file://tests_set_b.py:generate_tests   # all 40 items; pass config {split: dev|test} to filter
+
+defaultTest:
+  assert:
+    - type: python
+      value: file://assertions/tool_asserts.py:assert_tool_schema
+    - type: python
+      value: file://assertions/tool_asserts.py:assert_tool_action
+    - type: python
+      value: file://assertions/tool_asserts.py:assert_tool_args
+
+evaluateOptions:
+  maxConcurrency: 2
+  cache: true
