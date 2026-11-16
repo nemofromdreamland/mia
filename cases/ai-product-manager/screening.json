@@ -1,0 +1,56 @@
+{
+  "job_title": "Product Manager de Produtos de IA",
+  "fit_score": 78,
+  "strengths": [
+    {
+      "point": "Experiência em SaaS B2B alinhada com o requisito mínimo",
+      "cv_quote": "Product manager com seis anos de experiência em SaaS B2B"
+    },
+    {
+      "point": "Experiência comprovada em lançamento de funcionalidades de IA",
+      "cv_quote": "Lancei um assistente de IA que sugere respostas para atendentes, em parceria com o time de dados. Lancei também a classificação automática de chamados por assunto e urgência."
+    },
+    {
+      "point": "Demonstra capacidade de alinhamento entre áreas e mediação de conflitos",
+      "cv_quote": "Organizei o roteiro de produto trimestral com vendas, suporte e diretoria, negociando prioridades entre pedidos de cada área."
+    },
+    {
+      "point": "Experiência em descoberta com clientes e comunicação de aprendizados",
+      "cv_quote": "Conduzi entrevistas com clientes e reuni o aprendizado em documentos usados por todo o time."
+    },
+    {
+      "point": "Possui SQL básico, um dos diferenciais da vaga",
+      "cv_quote": "SQL básico"
+    }
+  ],
+  "concerns": [
+    {
+      "point": "Não definiu métricas de sucesso antes dos lançamentos de IA, contrariando requisito crítico",
+      "cv_quote": "Não defini, antes dos lançamentos, qual métrica mostraria se as funcionalidades deram certo, e por isso não tenho números de antes e depois para comparar."
+    },
+    {
+      "point": "Experiência em IA limitada a dois anos, enquanto vaga busca pessoa pleno com histórico mais consolidado",
+      "cv_quote": "os últimos dois dedicados a funcionalidades de inteligência artificial"
+    },
+    {
+      "point": "Falta de menção a experiência com dados sensíveis e privacidade, diferencial importante",
+      "cv_quote": "Coordenei a revisão de riscos com o jurídico antes de cada lançamento de IA."
+    }
+  ],
+  "missing_keywords": [
+    "Métricas de produto (acompanhamento sistemático)",
+    "Avaliação de modelos de linguagem",
+    "Dados sensíveis e privacidade",
+    "Qualidade de respostas de IA",
+    "Priorização com restrição de recursos",
+    "Comunicação de resultados para liderança"
+  ],
+  "competencies": [
+    "Definição e acompanhamento de métricas de sucesso para produtos de IA",
+    "Avaliação de qualidade e desempenho de modelos de linguagem",
+    "Priorização estratégica com recursos limitados",
+    "Gestão de stakeholders em contexto de incerteza técnica",
+    "Descoberta de problemas com clientes e validação de valor",
+    "Comunicação de trade-offs e decisões para liderança"
+  ]
+}

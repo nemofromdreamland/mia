@@ -1,0 +1,59 @@
+{
+  "job_title": "Desenvolvedor(a) Backend Python Jr",
+  "fit_score": 78,
+  "strengths": [
+    {
+      "point": "Experiência prática com Python e FastAPI, tecnologias principais da vaga",
+      "cv_quote": "API de controle de entregas, feita com FastAPI e PostgreSQL, com cadastro, consulta e atualização de status."
+    },
+    {
+      "point": "Conhecimento de bancos de dados relacionais e SQL demonstrado em projetos",
+      "cv_quote": "API de controle de entregas, feita com FastAPI e PostgreSQL"
+    },
+    {
+      "point": "Experiência com testes automatizados usando pytest",
+      "cv_quote": "Escrevi testes com pytest e guardei o código em um repositório no Git."
+    },
+    {
+      "point": "Uso de Git no dia a dia e versionamento de código",
+      "cv_quote": "guardei o código em um repositório no Git"
+    },
+    {
+      "point": "Experiência anterior em outra área (logística) que traz visão diferente do negócio",
+      "cv_quote": "Desenvolvedora em início de carreira, vinda da área de logística"
+    }
+  ],
+  "concerns": [
+    {
+      "point": "Experiência profissional em desenvolvimento é apenas acadêmica e em projetos pessoais",
+      "cv_quote": "Meus trabalhos de código foram feitos sozinha ou em dupla durante o curso. Ainda não trabalhei em um time de software"
+    },
+    {
+      "point": "Sem experiência prática em revisão de código em equipe",
+      "cv_quote": "não fiz revisão de código em equipe"
+    },
+    {
+      "point": "Sem experiência em ciclo completo de entrega com outras pessoas desenvolvedoras",
+      "cv_quote": "não participei de um ciclo completo de entrega com outras pessoas desenvolvedoras"
+    },
+    {
+      "point": "Conhecimento de Docker é apenas básico",
+      "cv_quote": "Docker básico"
+    }
+  ],
+  "missing_keywords": [
+    "Django",
+    "Integração contínua",
+    "CI/CD",
+    "APIs REST (mencionado apenas implicitamente nos projetos)",
+    "Documentação de código",
+    "Debugging em produção"
+  ],
+  "competencies": [
+    "Capacidade de aprender rapidamente e absorver feedback técnico",
+    "Comunicação e colaboração em equipe de desenvolvimento",
+    "Resolução de problemas e debugging de APIs",
+    "Escrita de testes e garantia de qualidade de código",
+    "Documentação técnica e clareza na comunicação de soluções"
+  ]
+}

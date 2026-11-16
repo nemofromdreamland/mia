@@ -1,0 +1,139 @@
+{
+  "persona": "technical",
+  "language": "pt-BR",
+  "estimated_minutes": 10,
+  "questions": [
+    {
+      "id": "q1",
+      "phase": "opening",
+      "competency": "Comunicação de insights técnicos para stakeholders não-técnicos",
+      "text": "Oi! Tudo bem? Vimos no seu currículo que você gosta de transformar perguntas de negócio em gráficos que as pessoas entendem. Me conta de um caso recente onde você precisou explicar um resultado de dados para alguém sem formação técnica — como você abordou isso?",
+      "purpose": "Avaliar capacidade de traduzir análise técnica em linguagem acessível e relevância para o negócio",
+      "look_for": [
+        "Escolheu um exemplo concreto e recente",
+        "Explicou o contexto de negócio antes dos números",
+        "Demonstrou preocupação com clareza visual ou narrativa"
+      ],
+      "follow_ups": [
+        "E se a pessoa questionasse o resultado? Como você reagiria?",
+        "Qual formato você usou para apresentar — slide, dashboard, reunião?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q2",
+      "phase": "projects",
+      "competency": "Construção e manutenção de dashboards confiáveis e escaláveis",
+      "text": "Você mencionou que montou 12 dashboards no Metabase para a diretoria e marketing. Qual foi o maior desafio que você enfrentou ao manter esses dashboards confiáveis e atualizados?",
+      "purpose": "Entender experiência prática com governança de dados, performance e manutenção de dashboards em produção",
+      "look_for": [
+        "Identificou um problema real (lentidão, dados desatualizados, falta de documentação)",
+        "Descreveu a solução técnica implementada",
+        "Mencionou impacto ou feedback dos usuários"
+      ],
+      "follow_ups": [
+        "Como você monitora se um dashboard continua confiável ao longo do tempo?",
+        "Você já precisou refatorar uma consulta SQL de um dashboard por performance?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q3",
+      "phase": "technical",
+      "competency": "SQL avançado e otimização de consultas em ambiente de alto volume",
+      "text": "Você trabalhou com PostgreSQL e funções de janela. Me dá um exemplo de uma consulta complexa que você escreveu — o que ela fazia e por que você escolheu usar window functions em vez de outra abordagem?",
+      "purpose": "Validar profundidade de conhecimento SQL e capacidade de escolher a ferramenta certa para o problema",
+      "look_for": [
+        "Descreveu um caso de uso real onde window functions eram a melhor solução",
+        "Explicou a sintaxe ou lógica de forma clara",
+        "Mencionou performance ou comparou com alternativas"
+      ],
+      "follow_ups": [
+        "Como você testa se uma consulta está otimizada?",
+        "Você já usou EXPLAIN ANALYZE ou ferramentas similares?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q4",
+      "phase": "technical",
+      "competency": "Desenho e análise autônoma de testes A/B com rigor estatístico",
+      "text": "No seu currículo, você menciona que acompanhava painéis de testes A/B e preparava slides com resultados. Agora, imagina que o time de produto quer testar uma mudança no checkout e te pede para desenhar o teste do zero — como você começaria? O que você precisaria definir antes de rodar?",
+      "purpose": "Avaliar compreensão de conceitos estatísticos (significância, poder, tamanho de amostra) e autonomia no desenho de experimentos",
+      "look_for": [
+        "Mencionou definição de hipótese e métrica principal",
+        "Falou sobre cálculo de tamanho de amostra ou duração do teste",
+        "Demonstrou conhecimento de significância estatística ou poder do teste"
+      ],
+      "follow_ups": [
+        "Como você decide se um teste rodou tempo suficiente?",
+        "O que você faria se o resultado fosse borderline — por exemplo, p-value de 0,08?"
+      ],
+      "targets_concern": "Participação limitada no desenho e análise de testes A/B, apenas acompanhamento passivo"
+    },
+    {
+      "id": "q5",
+      "phase": "technical",
+      "competency": "Definição e acompanhamento de métricas de produto (conversão, retenção, AOV)",
+      "text": "Você tem formação em Estatística, o que é ótimo. Qual é a diferença entre acompanhar uma métrica de conversão simples e acompanhar uma métrica de retenção? Por que uma é mais complexa que a outra?",
+      "purpose": "Validar compreensão de métricas de produto e capacidade de desenhar acompanhamento apropriado",
+      "look_for": [
+        "Explicou que retenção envolve coortes ou períodos de tempo",
+        "Mencionou desafios como dados incompletos ou viés de sobrevivência",
+        "Demonstrou pensamento sobre como medir cada uma"
+      ],
+      "follow_ups": [
+        "Como você definiria retenção para um e-commerce?",
+        "Você já trabalhou com análise de coortes?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q6",
+      "phase": "behavioral",
+      "competency": "Comunicação de insights técnicos para stakeholders não-técnicos",
+      "text": "Você trabalha em um time de dados pequeno — seis pessoas — e precisa responder a perguntas de produto, marketing e logística ao mesmo tempo. Como você prioriza quando recebe três pedidos urgentes no mesmo dia?",
+      "purpose": "Avaliar gestão de tempo, comunicação de trade-offs e alinhamento com negócio",
+      "look_for": [
+        "Descreveu um processo de priorização baseado em impacto ou urgência real",
+        "Mencionou comunicação com stakeholders sobre prazos",
+        "Mostrou flexibilidade ou capacidade de negociar"
+      ],
+      "follow_ups": [
+        "Você já teve que dizer 'não' para um pedido? Como foi?",
+        "Como você documenta o que faz para o time não ficar dependente de você?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q7",
+      "phase": "candidate_questions",
+      "competency": "Comunicação de insights técnicos para stakeholders não-técnicos",
+      "text": "Ótimo, agora é a sua vez. O que você gostaria de saber sobre o time de dados da Lumo ou sobre como a gente trabalha com análise aqui?",
+      "purpose": "Avaliar interesse genuíno, alinhamento de expectativas e qualidade das perguntas",
+      "look_for": [
+        "Fez perguntas sobre processos, ferramentas ou dinâmica do time",
+        "Demonstrou interesse em crescimento ou desafios técnicos",
+        "Perguntou sobre como os dados impactam decisões"
+      ],
+      "follow_ups": [],
+      "targets_concern": null
+    },
+    {
+      "id": "q8",
+      "phase": "closing",
+      "competency": "SQL avançado e otimização de consultas em ambiente de alto volume",
+      "text": "Antes de a gente terminar, uma última coisa: você tem experiência com Python para análise de dados? Não é obrigatório, mas é um diferencial para a gente.",
+      "purpose": "Validar presença de diferencial mencionado na vaga e avaliar disposição de aprender",
+      "look_for": [
+        "Respondeu com honestidade sobre nível de conhecimento",
+        "Se tem experiência, deu um exemplo prático",
+        "Se não tem, mostrou interesse em aprender"
+      ],
+      "follow_ups": [
+        "Se sim: em que contexto você usou Python? Se não: você teria interesse em aprender?"
+      ],
+      "targets_concern": null
+    }
+  ]
+}

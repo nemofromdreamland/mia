@@ -1,0 +1,54 @@
+{
+  "job_title": "Engenheiro(a) de Prompt Jr",
+  "fit_score": 78,
+  "strengths": [
+    {
+      "point": "Formação alinhada com os requisitos: graduação concluída em Sistemas de Informação",
+      "cv_quote": "Bacharelado em Sistemas de Informação, Universidade Federal do Vale Alto, concluído em 2025."
+    },
+    {
+      "point": "Experiência prática com RAG e construção de fluxos de busca em documentos",
+      "cv_quote": "Construí um assistente que responde perguntas sobre regulamentos da faculdade a partir de 60 documentos em PDF. Usei Python, LangChain e um banco vetorial local. Dividi os textos em trechos de 500 caracteres e testei tamanhos diferentes."
+    },
+    {
+      "point": "Domínio de tool calling e integração de modelos com ferramentas",
+      "cv_quote": "Projeto pessoal em que o modelo chama uma função para consultar uma tabela de ingredientes e devolve uma lista de compras. Aprendi a descrever as ferramentas com um esquema JSON e a tratar erros quando o modelo envia argumentos inválidos."
+    },
+    {
+      "point": "Python em nível intermediário com experiência em produção",
+      "cv_quote": "Corrigi cerca de 30 bugs no back-end em Python e escrevi testes automatizados para as rotas de pedidos."
+    },
+    {
+      "point": "Interesse demonstrado em comunidades e projetos de IA",
+      "cv_quote": "Participo de um grupo de estudos de IA da faculdade, em que apresentei um seminário sobre técnicas de prompting e sobre limitações dos modelos."
+    }
+  ],
+  "concerns": [
+    {
+      "point": "Avaliação de prompts sem metodologia rigorosa: não utilizou conjunto fixo de testes nem métricas definidas",
+      "cv_quote": "Avaliei o resultado fazendo perguntas à mão e lendo as respostas. Quando uma resposta parecia errada, ajustava o prompt e testava de novo. Não montei um conjunto fixo de perguntas nem uma métrica para comparar versões."
+    },
+    {
+      "point": "Experiência profissional limitada a estágio de curta duração sem foco em IA",
+      "cv_quote": "Estagiária de desenvolvimento, Mercado Serra Digital (2024–2025)"
+    },
+    {
+      "point": "Projetos de IA restritos ao ambiente acadêmico e pessoal, sem experiência em contexto corporativo",
+      "cv_quote": "Chatbot de dúvidas acadêmicas com RAG (trabalho de conclusão de curso)"
+    }
+  ],
+  "missing_keywords": [
+    "Ferramentas de avaliação de prompts (Promptfoo, Arize, etc.)",
+    "Experiência com comparação e versionamento de prompts",
+    "Comunicação com stakeholders de negócio",
+    "Experiência em fluxos de produção ou em escala",
+    "Conhecimento de métricas de qualidade para LLMs"
+  ],
+  "competencies": [
+    "Estruturação e otimização de prompts com base em testes sistemáticos",
+    "Avaliação crítica de respostas de modelos usando métricas e conjuntos de teste",
+    "Comunicação técnica com não-técnicos para explicar limitações e resultados",
+    "Resolução de problemas em fluxos de RAG e tool calling",
+    "Aprendizado rápido e adaptação a novas ferramentas e frameworks de IA"
+  ]
+}

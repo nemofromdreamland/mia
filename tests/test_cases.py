@@ -163,3 +163,23 @@ def test_write_fixtures_roundtrip(tmp_path: Path) -> None:
     loaded = load_case(CASE_ID, tmp_path)
     assert loaded.screening == result.screening
     assert loaded.plan == result.plan
+
+
+REAL_CASE_IDS = [
+    "ai-product-manager",
+    "backend-python-jr",
+    "data-analyst-pleno",
+    "prompt-engineer-jr",
+    "software-intern",
+]
+
+
+def test_real_cases_are_listed() -> None:
+    assert [c.case_id for c in list_cases()] == REAL_CASE_IDS
+
+
+@pytest.mark.parametrize("case_id", REAL_CASE_IDS)
+def test_real_case_loads(case_id: str) -> None:
+    loaded = load_case(case_id)
+    assert loaded.case.case_id == case_id
+    assert loaded.plan.questions

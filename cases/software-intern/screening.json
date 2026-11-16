@@ -1,0 +1,50 @@
+{
+  "job_title": "Estágio em Desenvolvimento de Software",
+  "fit_score": 82,
+  "strengths": [
+    {
+      "point": "Atende ao requisito de formação acadêmica no semestre correto",
+      "cv_quote": "Bacharelado em Ciência da Computação, Universidade Estadual do Vale Verde, cursando o 5º semestre"
+    },
+    {
+      "point": "Domina múltiplas linguagens de programação solicitadas",
+      "cv_quote": "Python, Java, JavaScript, HTML, CSS, SQL, Git básico"
+    },
+    {
+      "point": "Demonstra experiência prática com testes automatizados",
+      "cv_quote": "Sistema de biblioteca, em Java, feito em grupo de quatro pessoas na disciplina de Orientação a Objetos. Cuidei do cadastro de livros e da parte de testes"
+    },
+    {
+      "point": "Possui experiência em trabalho colaborativo e mentorado",
+      "cv_quote": "Monitora da disciplina de Algoritmos por um semestre: ajudava colegas a resolver exercícios e a entender erros"
+    },
+    {
+      "point": "Manifesta claramente motivação e disposição para aprender",
+      "cv_quote": "Gosto de aprender fazendo: nas aulas e em projetos da faculdade escrevi programas, trabalhei em grupo e descobri que programar é o que mais me anima. Quero aprender como se desenvolve software de verdade, em uma equipe"
+    }
+  ],
+  "concerns": [
+    {
+      "point": "Experiência com Git é apenas básica, podendo necessitar desenvolvimento",
+      "cv_quote": "Python, Java, JavaScript, HTML, CSS, SQL, Git básico"
+    },
+    {
+      "point": "Todos os projetos mencionados são de contexto acadêmico, sem portfólio profissional ou pessoal",
+      "cv_quote": "Não tenho experiência profissional na área nem em outras funções com carteira assinada. Tudo o que fiz até agora foi em contexto de estudo"
+    }
+  ],
+  "missing_keywords": [
+    "Banco de dados (experiência prática além de acadêmica)",
+    "Projetos pessoais ou portfólio público",
+    "Interesse específico por educação",
+    "Disponibilidade de seis horas por dia (não mencionada)",
+    "Experiência com testes automatizados em contexto profissional"
+  ],
+  "competencies": [
+    "Capacidade de aprender rapidamente e absorver feedback",
+    "Comunicação clara e disposição para pedir ajuda quando necessário",
+    "Trabalho em equipe e colaboração",
+    "Resolução de problemas e pensamento lógico",
+    "Documentação e organização de tarefas"
+  ]
+}

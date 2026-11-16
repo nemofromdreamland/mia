@@ -1,0 +1,137 @@
+{
+  "persona": "manager",
+  "language": "pt-BR",
+  "estimated_minutes": 10,
+  "questions": [
+    {
+      "id": "q1",
+      "phase": "opening",
+      "competency": "Gestão de stakeholders em contexto de incerteza técnica",
+      "text": "Oi! Tudo bem? Vimos que você tem experiência com IA e SaaS B2B. Antes de entrarmos nos detalhes, me conta: qual foi o maior desafio que você enfrentou ao lançar uma funcionalidade de IA, considerando que nem sempre a tecnologia se comporta como esperado?",
+      "purpose": "Entender como o candidato lida com incerteza técnica e stakeholders ansiosos por resultados",
+      "look_for": [
+        "Reconhece a incerteza como parte natural de projetos de IA",
+        "Descreve como comunicou riscos ou limitações para áreas não técnicas",
+        "Menciona ajustes de expectativa ou replaneamento durante o projeto"
+      ],
+      "follow_ups": [
+        "Como você explicou isso para vendas ou diretoria?",
+        "Qual foi o resultado final desse projeto?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q2",
+      "phase": "projects",
+      "competency": "Definição e acompanhamento de métricas de sucesso para produtos de IA",
+      "text": "Você mencionou no currículo que lançou um assistente de IA para sugerir respostas. Quero entender melhor: antes de lançar, como você definiu o que significaria 'sucesso' para essa funcionalidade? Que métricas você acompanhou?",
+      "purpose": "Avaliar se o candidato estabelece métricas antes do lançamento, não depois, e se consegue conectar IA a negócio",
+      "look_for": [
+        "Menciona métricas definidas antes do lançamento (não retroativamente)",
+        "Conecta métricas técnicas a impacto de negócio (tempo economizado, satisfação, etc.)",
+        "Descreve como acompanhou essas métricas após o lançamento"
+      ],
+      "follow_ups": [
+        "Você tinha uma meta numérica para cada métrica?",
+        "Como você soube quando a funcionalidade estava pronta para sair do beta?"
+      ],
+      "targets_concern": "Não definiu métricas de sucesso antes dos lançamentos de IA, contrariando requisito crítico"
+    },
+    {
+      "id": "q3",
+      "phase": "technical",
+      "competency": "Avaliação de qualidade e desempenho de modelos de linguagem",
+      "text": "Na Atlas, vamos trabalhar com resumo automático de contratos e busca por linguagem natural. Essas são tarefas onde a qualidade da IA é crítica. Como você avalia se um modelo de linguagem está bom o suficiente para ir para produção? O que você olha?",
+      "purpose": "Verificar se o candidato tem critérios concretos para avaliar qualidade de IA, não apenas intuição",
+      "look_for": [
+        "Menciona testes com dados reais ou casos de uso específicos",
+        "Descreve envolvimento com time de dados ou técnico nessa avaliação",
+        "Fala sobre trade-offs (velocidade vs. precisão, cobertura vs. qualidade)"
+      ],
+      "follow_ups": [
+        "Você já trabalhou com matriz de confusão ou métricas como precision e recall?",
+        "Como você envolveu o time de dados nessa decisão?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q4",
+      "phase": "technical",
+      "competency": "Priorização estratégica com recursos limitados",
+      "text": "Imagine que você tem três ideias de funcionalidades de IA para o próximo trimestre: uma que 80% dos clientes pede, outra que pode reduzir custo operacional em 30%, e uma terceira que é tecnicamente mais fácil de implementar. Como você decide qual fazer primeiro com um time pequeno?",
+      "purpose": "Entender o framework de priorização do candidato e se consegue justificar escolhas difíceis",
+      "look_for": [
+        "Usa critério explícito (impacto, esforço, risco, alinhamento estratégico)",
+        "Reconhece que não dá para fazer tudo e explica o trade-off",
+        "Menciona comunicação da decisão para stakeholders decepcionados"
+      ],
+      "follow_ups": [
+        "Como você comunicaria isso para vendas, que quer a primeira?",
+        "Você teria feito diferente em outro contexto?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q5",
+      "phase": "behavioral",
+      "competency": "Descoberta de problemas com clientes e validação de valor",
+      "text": "Você conduziu entrevistas com clientes no seu último trabalho. Conte de um problema que um cliente descreveu que você achou que não valia a pena resolver. Como você chegou a essa conclusão e como comunicou?",
+      "purpose": "Avaliar se o candidato consegue dizer não com base em dados, não em achismo",
+      "look_for": [
+        "Descreve critério usado para avaliar se vale a pena (tamanho do mercado, frequência, impacto)",
+        "Menciona validação com mais de um cliente",
+        "Explica como comunicou a decisão de forma respeitosa"
+      ],
+      "follow_ups": [
+        "Você se arrependeu depois dessa decisão?",
+        "Como você documentou esse aprendizado?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q6",
+      "phase": "behavioral",
+      "competency": "Comunicação de trade-offs e decisões para liderança",
+      "text": "Você mencionou que coordenou revisão de riscos com o jurídico antes de lançar IA. Houve alguma vez em que o jurídico pediu para não lançar algo que você achava importante? Como você lidou com isso?",
+      "purpose": "Avaliar maturidade em lidar com restrições de compliance e comunicar para cima",
+      "look_for": [
+        "Reconhece legitimidade da preocupação jurídica",
+        "Descreve como buscou solução criativa (não apenas aceitou ou ignorou)",
+        "Menciona como comunicou a decisão final para stakeholders"
+      ],
+      "follow_ups": [
+        "Qual foi a solução que vocês encontraram?",
+        "Como você teria agido se não houvesse solução?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q7",
+      "phase": "candidate_questions",
+      "competency": "Gestão de stakeholders em contexto de incerteza técnica",
+      "text": "Você tem alguma pergunta para mim sobre o time, a empresa ou o desafio?",
+      "purpose": "Avaliar o que o candidato prioriza em conhecer e se faz perguntas inteligentes",
+      "look_for": [
+        "Pergunta sobre estrutura do time de dados ou engenharia",
+        "Quer entender o contexto de negócio (clientes, concorrência, roadmap)",
+        "Faz perguntas sobre como será medido o sucesso dele no cargo"
+      ],
+      "follow_ups": [],
+      "targets_concern": null
+    },
+    {
+      "id": "q8",
+      "phase": "closing",
+      "competency": "Comunicação de trade-offs e decisões para liderança",
+      "text": "Antes de terminarmos, quero que você resuma em uma frase por que você acha que é a pessoa certa para esse desafio na Atlas. O que você traz que faz diferença?",
+      "purpose": "Avaliar autoconhecimento e capacidade de síntese",
+      "look_for": [
+        "Conecta experiência anterior ao desafio específico da vaga",
+        "Reconhece pontos de desenvolvimento, não só força",
+        "Fala com confiança, mas sem arrogância"
+      ],
+      "follow_ups": [],
+      "targets_concern": null
+    }
+  ]
+}

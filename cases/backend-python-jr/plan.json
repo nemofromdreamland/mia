@@ -1,0 +1,160 @@
+{
+  "persona": "hr",
+  "language": "pt-BR",
+  "estimated_minutes": 10,
+  "questions": [
+    {
+      "id": "q1",
+      "phase": "opening",
+      "competency": "Comunicação e colaboração em equipe de desenvolvimento",
+      "text": "Oi! Tudo bem? Obrigado por estar aqui. Antes de tudo, me conta um pouco sobre você: qual é sua trajetória até aqui e o que te trouxe para a área de desenvolvimento?",
+      "purpose": "Conhecer a pessoa, entender sua motivação e avaliar clareza na comunicação",
+      "look_for": [
+        "Narrativa clara e bem estruturada sobre sua trajetória",
+        "Menção genuína de interesse em desenvolvimento ou tecnologia",
+        "Conforto ao falar sobre si mesmo e abertura para conversa"
+      ],
+      "follow_ups": [
+        "O que você mais gostou de aprender durante esse caminho?",
+        "Qual foi o maior desafio que você enfrentou até agora?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q2",
+      "phase": "projects",
+      "competency": "Resolução de problemas e debugging de APIs",
+      "text": "Vi no seu currículo que você desenvolveu uma API de controle de entregas com FastAPI e PostgreSQL. Me conta como foi esse projeto: qual era o problema que você estava tentando resolver e como você chegou na solução?",
+      "purpose": "Entender o pensamento técnico, capacidade de análise e como a pessoa aborda problemas",
+      "look_for": [
+        "Explicação clara do problema e da necessidade",
+        "Demonstração de raciocínio lógico na escolha das tecnologias",
+        "Menção a desafios encontrados e como foram resolvidos"
+      ],
+      "follow_ups": [
+        "Teve algum momento em que algo não funcionou como esperado? Como você resolveu?",
+        "Se você tivesse que fazer esse projeto novamente, o que faria diferente?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q3",
+      "phase": "projects",
+      "competency": "Escrita de testes e garantia de qualidade de código",
+      "text": "Você mencionou que usou pytest para escrever testes. Qual era o objetivo desses testes e como você decidiu o que testar?",
+      "purpose": "Avaliar compreensão sobre importância de testes e capacidade de pensar em cobertura",
+      "look_for": [
+        "Entendimento de que testes garantem funcionamento correto",
+        "Menção a diferentes tipos de teste ou cenários testados",
+        "Reflexão sobre o que é importante testar"
+      ],
+      "follow_ups": [
+        "Você testou casos de erro ou apenas o caminho feliz?",
+        "Como você sentia quando os testes passavam?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q4",
+      "phase": "technical",
+      "competency": "Comunicação e colaboração em equipe de desenvolvimento",
+      "text": "Você trabalhou em dupla em alguns projetos. Como era receber feedback do seu colega sobre o código? Como você reagia quando alguém sugeria uma mudança?",
+      "purpose": "Avaliar abertura a feedback, humildade e capacidade de colaboração em revisão de código",
+      "look_for": [
+        "Atitude positiva e curiosa diante de sugestões",
+        "Exemplos concretos de como incorporou feedback",
+        "Reconhecimento de que feedback melhora o código"
+      ],
+      "follow_ups": [
+        "Teve alguma vez que você discordou de um feedback? Como vocês resolveram?",
+        "Você já deu feedback para alguém? Como foi?"
+      ],
+      "targets_concern": "Sem experiência prática em revisão de código em equipe"
+    },
+    {
+      "id": "q5",
+      "phase": "technical",
+      "competency": "Capacidade de aprender rapidamente e absorver feedback técnico",
+      "text": "Você vem da área de logística e agora está entrando em desenvolvimento. Como você se sente sobre aprender coisas novas rapidamente? Pode dar um exemplo de algo que você aprendeu sozinha recentemente?",
+      "purpose": "Avaliar disposição para aprender, autonomia e velocidade de absorção de conhecimento",
+      "look_for": [
+        "Exemplos concretos de aprendizado recente e autodidata",
+        "Menção a recursos usados (documentação, cursos, comunidade)",
+        "Confiança e entusiasmo ao falar sobre aprendizado"
+      ],
+      "follow_ups": [
+        "Como você se organiza para aprender algo novo?",
+        "Qual é a sua maior dúvida técnica agora?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q6",
+      "phase": "behavioral",
+      "competency": "Documentação técnica e clareza na comunicação de soluções",
+      "text": "Imagine que você terminou de desenvolver uma funcionalidade importante e precisa explicar para o time como ela funciona. Como você faria isso? O que você documentaria?",
+      "purpose": "Avaliar capacidade de comunicar soluções técnicas de forma clara e pensar em documentação",
+      "look_for": [
+        "Menção a diferentes formas de documentação (código comentado, README, diagramas)",
+        "Pensamento em quem vai ler a documentação",
+        "Clareza ao explicar conceitos técnicos"
+      ],
+      "follow_ups": [
+        "Você já escreveu documentação antes? Como foi?",
+        "O que você acha mais importante documentar?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q7",
+      "phase": "behavioral",
+      "competency": "Capacidade de aprender rapidamente e absorver feedback técnico",
+      "text": "Você nunca trabalhou em um ciclo completo de entrega com outras pessoas desenvolvedoras. Como você se sente sobre isso? O que você imagina que pode ser diferente de trabalhar sozinha?",
+      "purpose": "Avaliar autoconsciência, disposição para aprender com a experiência e expectativas realistas",
+      "look_for": [
+        "Honestidade sobre o desafio e disposição para aprender",
+        "Reflexão sobre diferenças entre trabalho individual e em equipe",
+        "Menção a pedir ajuda quando precisar"
+      ],
+      "follow_ups": [
+        "Qual é sua maior preocupação sobre entrar em um time?",
+        "Como você pensa que podemos te ajudar nas primeiras semanas?"
+      ],
+      "targets_concern": "Sem experiência em ciclo completo de entrega com outras pessoas desenvolvedoras"
+    },
+    {
+      "id": "q8",
+      "phase": "candidate_questions",
+      "competency": "Comunicação e colaboração em equipe de desenvolvimento",
+      "text": "Agora é sua vez! Que perguntas você tem para a gente sobre a vaga, o time ou a empresa?",
+      "purpose": "Avaliar interesse genuíno, pensamento crítico e o que a pessoa valoriza",
+      "look_for": [
+        "Perguntas relevantes sobre o trabalho, time ou cultura",
+        "Demonstração de que pesquisou sobre a empresa",
+        "Curiosidade sobre mentoria e desenvolvimento profissional"
+      ],
+      "follow_ups": [
+        "Quer saber mais sobre alguma coisa específica?",
+        "Tem alguma dúvida sobre o processo ou próximos passos?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q9",
+      "phase": "closing",
+      "competency": "Comunicação e colaboração em equipe de desenvolvimento",
+      "text": "Obrigado pelas respostas! Antes de a gente se despedir, como você se sentiu nessa conversa? Tem algo que você gostaria de adicionar ou deixar claro?",
+      "purpose": "Dar espaço para a pessoa se expressar, avaliar conforto e deixar porta aberta",
+      "look_for": [
+        "Autenticidade e conforto na comunicação",
+        "Disposição para adicionar informações relevantes",
+        "Entusiasmo genuíno pela oportunidade"
+      ],
+      "follow_ups": [
+        "Qual foi a parte que você mais gostou dessa conversa?",
+        "Tem algo que você quer que a gente saiba sobre você?"
+      ],
+      "targets_concern": null
+    }
+  ]
+}

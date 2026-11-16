@@ -1,0 +1,52 @@
+{
+  "job_title": "Analista de Dados Pleno",
+  "fit_score": 72,
+  "strengths": [
+    {
+      "point": "Experiência em e-commerce alinhada com o diferencial da vaga",
+      "cv_quote": "Analista de dados com três anos de experiência em e-commerce e varejo."
+    },
+    {
+      "point": "Domínio de SQL avançado com as técnicas exigidas",
+      "cv_quote": "Escrevi consultas SQL em PostgreSQL com junções e funções de janela para analisar vendas, estoque e devoluções."
+    },
+    {
+      "point": "Experiência prática com Metabase, uma das ferramentas mencionadas",
+      "cv_quote": "Montei 12 dashboards de vendas no Metabase, usados toda semana pela diretoria e pelo time de marketing."
+    },
+    {
+      "point": "Formação em Estatística e capacidade de definir métricas de negócio",
+      "cv_quote": "Bacharelado em Estatística, Universidade Federal do Planalto Sul, concluído em 2022."
+    },
+    {
+      "point": "Habilidade em comunicação e storytelling com dados",
+      "cv_quote": "Gosto de transformar uma pergunta de negócio em uma consulta clara e em um gráfico que as pessoas entendam."
+    }
+  ],
+  "concerns": [
+    {
+      "point": "Participação limitada no desenho e análise de testes A/B, apenas acompanhamento passivo",
+      "cv_quote": "Eu acompanhava os painéis, lia os resultados prontos e preparava os slides para a reunião de resultados. Não participei da escolha de amostra, do tempo de duração nem da definição da métrica principal desses testes."
+    },
+    {
+      "point": "Conhecimento de estatística descritiva mencionado, mas não há evidência de aplicação de conceitos como significância e poder estatístico",
+      "cv_quote": "estatística descritiva, storytelling com dados."
+    }
+  ],
+  "missing_keywords": [
+    "Significância estatística",
+    "Poder estatístico",
+    "Cálculo de tamanho de amostra",
+    "Testes A/B (desenho e análise autônoma)",
+    "Métricas de funil",
+    "Análise de coortes",
+    "Looker"
+  ],
+  "competencies": [
+    "Desenho e análise autônoma de testes A/B com rigor estatístico",
+    "SQL avançado e otimização de consultas em ambiente de alto volume",
+    "Definição e acompanhamento de métricas de produto (conversão, retenção, AOV)",
+    "Comunicação de insights técnicos para stakeholders não-técnicos",
+    "Construção e manutenção de dashboards confiáveis e escaláveis"
+  ]
+}

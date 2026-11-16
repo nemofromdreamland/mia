@@ -1,0 +1,120 @@
+{
+  "persona": "technical",
+  "language": "pt-BR",
+  "estimated_minutes": 10,
+  "questions": [
+    {
+      "id": "q1",
+      "phase": "opening",
+      "competency": "Aprendizado rápido e adaptação a novas ferramentas e frameworks de IA",
+      "text": "Oi! Tudo bem? Vimos no seu currículo que você trabalhou com LangChain e RAG em um projeto acadêmico. Como foi sua experiência aprendendo essas ferramentas? O que você fez quando encontrou algo que não sabia?",
+      "purpose": "Entender como o candidato aborda o aprendizado de novas tecnologias e se consegue ser autossuficiente em um ambiente de IA em rápida evolução.",
+      "look_for": [
+        "Menção a recursos usados (documentação, comunidades, experimentação prática)",
+        "Capacidade de resolver bloqueios de forma independente",
+        "Reflexão sobre o processo de aprendizado, não apenas o resultado final"
+      ],
+      "follow_ups": [
+        "Qual foi o maior desafio técnico que você enfrentou nesse projeto?",
+        "Se tivesse que aprender uma ferramenta completamente nova em uma semana, como você se organizaria?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q2",
+      "phase": "projects",
+      "competency": "Resolução de problemas em fluxos de RAG e tool calling",
+      "text": "Você mencionou que construiu um assistente com RAG dividindo os textos em trechos de 500 caracteres e testou tamanhos diferentes. Por que você decidiu testar tamanhos diferentes? O que mudou nos resultados?",
+      "purpose": "Avaliar se o candidato consegue identificar problemas em fluxos de IA, formular hipóteses e validá-las experimentalmente.",
+      "look_for": [
+        "Explicação clara do problema que motivou o teste (ex: respostas muito genéricas, falta de contexto)",
+        "Descrição do experimento e como os resultados foram comparados",
+        "Conclusão prática sobre qual tamanho funcionou melhor e por quê"
+      ],
+      "follow_ups": [
+        "E se o tamanho ideal fosse diferente para perguntas curtas e perguntas longas? Como você descobriria isso?",
+        "Você testou outras variáveis além do tamanho do trecho?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q3",
+      "phase": "technical",
+      "competency": "Avaliação crítica de respostas de modelos usando métricas e conjuntos de teste",
+      "text": "No seu projeto de RAG, você disse que avaliou o resultado fazendo perguntas à mão e lendo as respostas. Agora imagine que você precisa comparar duas versões de um prompt para um cliente real, e o cliente quer saber qual é melhor. Como você faria essa comparação de forma que o cliente confiasse no resultado?",
+      "purpose": "Investigar se o candidato compreende a importância de metodologia rigorosa e consegue pensar em métricas objetivas, não apenas impressão pessoal.",
+      "look_for": [
+        "Menção a um conjunto fixo de perguntas de teste (não apenas algumas aleatórias)",
+        "Definição de uma métrica ou critério mensurável (ex: acurácia, relevância, tempo de resposta)",
+        "Reconhecimento de que avaliação manual é subjetiva e precisa de estrutura"
+      ],
+      "follow_ups": [
+        "Que tipo de perguntas você colocaria nesse conjunto de teste?",
+        "Como você mediria se uma resposta é 'melhor' que a outra?"
+      ],
+      "targets_concern": "Avaliação de prompts sem metodologia rigorosa: não utilizou conjunto fixo de testes nem métricas definidas"
+    },
+    {
+      "id": "q4",
+      "phase": "technical",
+      "competency": "Estruturação e otimização de prompts com base em testes sistemáticos",
+      "text": "Você apresentou um seminário sobre técnicas de prompting. Qual foi a técnica que você achou mais útil na prática? Você consegue dar um exemplo de como ela melhorou um resultado?",
+      "purpose": "Validar conhecimento prático de técnicas de prompting e capacidade de aplicá-las de forma concreta.",
+      "look_for": [
+        "Menção a uma técnica específica (chain-of-thought, few-shot, role-playing, etc.)",
+        "Exemplo concreto do projeto em que a técnica foi usada",
+        "Explicação clara de como o resultado melhorou"
+      ],
+      "follow_ups": [
+        "E qual técnica você acha que ainda precisa explorar mais?",
+        "Como você decidiria qual técnica usar para um novo problema?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q5",
+      "phase": "behavioral",
+      "competency": "Comunicação técnica com não-técnicos para explicar limitações e resultados",
+      "text": "Imagine que você apresenta os resultados de um prompt para um gerente de produto que não entende de IA. O modelo está acertando 85% das vezes, mas o gerente quer saber se isso é bom ou ruim. Como você explicaria?",
+      "purpose": "Avaliar se o candidato consegue traduzir conceitos técnicos para linguagem de negócio e comunicar limitações de forma clara.",
+      "look_for": [
+        "Explicação em termos de impacto no negócio, não apenas em porcentagem",
+        "Menção a contexto (85% é bom para quê? Ruim para quê?)",
+        "Sugestão de próximos passos ou trade-offs"
+      ],
+      "follow_ups": [
+        "E se o gerente pedisse para melhorar para 95%? Como você responderia?",
+        "Qual informação você precisaria para saber se 85% é aceitável?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q6",
+      "phase": "candidate_questions",
+      "competency": "Aprendizado rápido e adaptação a novas ferramentas e frameworks de IA",
+      "text": "Você tem alguma pergunta para a gente? Pode ser sobre a vaga, o time, a empresa ou qualquer coisa que queira saber.",
+      "purpose": "Dar espaço para o candidato fazer perguntas relevantes e avaliar seu interesse e pensamento crítico.",
+      "look_for": [
+        "Perguntas sobre o contexto real do trabalho (clientes, projetos, desafios)",
+        "Interesse em aprendizado e desenvolvimento",
+        "Curiosidade sobre ferramentas ou metodologias usadas no time"
+      ],
+      "follow_ups": [],
+      "targets_concern": null
+    },
+    {
+      "id": "q7",
+      "phase": "closing",
+      "competency": "Aprendizado rápido e adaptação a novas ferramentas e frameworks de IA",
+      "text": "Obrigado pelas respostas! Antes de a gente se despedir, qual é a sua maior expectativa para os primeiros três meses aqui na Nexa?",
+      "purpose": "Entender as expectativas do candidato e reforçar o compromisso com aprendizado contínuo.",
+      "look_for": [
+        "Foco em aprendizado e desenvolvimento, não apenas em tarefas",
+        "Realismo sobre o que é possível em três meses",
+        "Alinhamento com a cultura de mentoria e crescimento da empresa"
+      ],
+      "follow_ups": [],
+      "targets_concern": null
+    }
+  ]
+}

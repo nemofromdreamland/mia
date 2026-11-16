@@ -1,0 +1,137 @@
+{
+  "persona": "hr",
+  "language": "pt-BR",
+  "estimated_minutes": 10,
+  "questions": [
+    {
+      "id": "q1",
+      "phase": "opening",
+      "competency": "Capacidade de aprender rapidamente e absorver feedback",
+      "text": "Oi! Tudo bem? Obrigado por estar aqui. Antes de tudo, me conta: como você costuma aprender coisas novas em programação? Você prefere estudar sozinho, pedir ajuda ou uma mistura dos dois?",
+      "purpose": "Entender a disposição do candidato para aprender e como ele se relaciona com feedback e mentoría",
+      "look_for": [
+        "Menciona experiências concretas de aprendizado",
+        "Demonstra abertura para receber orientação",
+        "Mostra iniciativa em buscar recursos ou ajuda"
+      ],
+      "follow_ups": [
+        "Você já recebeu feedback de um professor ou colega que mudou a forma como você programa?",
+        "Como você reage quando não consegue resolver um problema sozinho?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q2",
+      "phase": "projects",
+      "competency": "Resolução de problemas e pensamento lógico",
+      "text": "Vi no seu currículo que você fez um sistema de biblioteca em Java com testes. Conta pra mim: qual foi o maior desafio que você enfrentou nesse projeto e como você resolveu?",
+      "purpose": "Avaliar como o candidato aborda problemas complexos e se consegue explicar seu raciocínio",
+      "look_for": [
+        "Descreve um desafio real e específico",
+        "Explica o processo de resolução de forma lógica",
+        "Reconhece o que aprendeu com a experiência"
+      ],
+      "follow_ups": [
+        "E se você tivesse que fazer esse projeto de novo, o que faria diferente?",
+        "Você usou alguma ferramenta ou padrão que ajudou na resolução?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q3",
+      "phase": "projects",
+      "competency": "Trabalho em equipe e colaboração",
+      "text": "Você trabalhou em grupo no projeto da biblioteca. Como foi dividir as tarefas com seus colegas? E como você se comunicava quando alguém tinha dúvida ou quando havia um conflito?",
+      "purpose": "Entender como o candidato colabora, comunica e resolve conflitos em equipe",
+      "look_for": [
+        "Descreve divisão clara de responsabilidades",
+        "Menciona comunicação ativa e resolução de problemas",
+        "Mostra empatia e disposição para ajudar colegas"
+      ],
+      "follow_ups": [
+        "Você já teve que ensinar algo para um colega que não entendia? Como foi?",
+        "O que você aprendeu sobre trabalho em equipe nessa experiência?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q4",
+      "phase": "technical",
+      "competency": "Documentação e organização de tarefas",
+      "text": "Aqui na Trilha, a gente valoriza muito documentar o que faz. Como você costuma documentar seus projetos? Você usa alguma ferramenta ou formato específico?",
+      "purpose": "Avaliar se o candidato entende a importância de documentação e como ele a pratica",
+      "look_for": [
+        "Menciona práticas de documentação (comentários, README, etc.)",
+        "Entende o propósito da documentação para o time",
+        "Mostra disposição para melhorar nessa área"
+      ],
+      "follow_ups": [
+        "Você já usou Git para organizar suas tarefas ou commits?",
+        "Como você acha que a documentação ajuda quando você trabalha em grupo?"
+      ],
+      "targets_concern": "Experiência com Git é apenas básica, podendo necessitar desenvolvimento"
+    },
+    {
+      "id": "q5",
+      "phase": "technical",
+      "competency": "Comunicação clara e disposição para pedir ajuda quando necessário",
+      "text": "Imagina que você está trabalhando em uma tarefa e fica preso por mais de uma hora sem conseguir avançar. O que você faz? Como você pediria ajuda para sua mentora?",
+      "purpose": "Avaliar se o candidato sabe quando e como pedir ajuda, sem ficar frustrado ou envergonhado",
+      "look_for": [
+        "Reconhece o momento certo de pedir ajuda",
+        "Descreve como prepararia a pergunta (contexto, o que já tentou)",
+        "Mostra disposição para aprender com a ajuda recebida"
+      ],
+      "follow_ups": [
+        "Você já pediu ajuda para um professor ou colega? Como foi?",
+        "O que você faria para não ficar preso novamente no mesmo problema?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q6",
+      "phase": "behavioral",
+      "competency": "Trabalho em equipe e colaboração",
+      "text": "Você foi monitor de Algoritmos e ajudava colegas com exercícios. Qual foi a situação mais difícil que você enfrentou como monitor? Como você lidou com isso?",
+      "purpose": "Entender como o candidato lida com desafios em ensinar e aprender simultaneamente",
+      "look_for": [
+        "Descreve uma situação concreta e desafiadora",
+        "Mostra paciência e disposição para explicar de formas diferentes",
+        "Reconhece o próprio aprendizado na experiência"
+      ],
+      "follow_ups": [
+        "Você recebeu feedback dos alunos que você ajudava?",
+        "O que essa experiência te ensinou sobre comunicação?"
+      ],
+      "targets_concern": null
+    },
+    {
+      "id": "q7",
+      "phase": "candidate_questions",
+      "competency": "Comunicação clara e disposição para pedir ajuda quando necessário",
+      "text": "Agora é a sua vez! Você tem alguma pergunta sobre a vaga, o time ou a Trilha?",
+      "purpose": "Avaliar o interesse genuíno do candidato e se ele fez pesquisa sobre a empresa",
+      "look_for": [
+        "Faz perguntas relevantes sobre o dia a dia ou a mentoria",
+        "Demonstra interesse em educação ou na missão da empresa",
+        "Questiona sobre aprendizado e desenvolvimento profissional"
+      ],
+      "follow_ups": [],
+      "targets_concern": null
+    },
+    {
+      "id": "q8",
+      "phase": "closing",
+      "competency": "Capacidade de aprender rapidamente e absorver feedback",
+      "text": "Perfeito! Antes de a gente se despedir, me diz: por que você acha que seria um bom fit para esse estágio aqui na Trilha? O que você espera aprender com a gente?",
+      "purpose": "Reforçar motivação e alinhamento com a vaga, deixando uma boa impressão final",
+      "look_for": [
+        "Conecta suas habilidades com as necessidades da vaga",
+        "Demonstra motivação genuína por aprender e crescer",
+        "Mostra interesse específico na empresa ou na área de educação"
+      ],
+      "follow_ups": [],
+      "targets_concern": null
+    }
+  ]
+}
