@@ -16,9 +16,7 @@ PROMPT_NAMES: tuple[str, ...] = (
 )
 
 # Prompts not written yet; removed as each step lands.
-PENDING: frozenset[str] = frozenset(
-    {"interviewer", "follow_up", "synthetic_candidate", "report", "candidate_summary"}
-)
+PENDING: frozenset[str] = frozenset({"report", "candidate_summary"})
 
 EXPECTED_SCHEMA: dict[str, str | None] = {
     "screening": "Screening",
