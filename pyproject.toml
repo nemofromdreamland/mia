@@ -8,6 +8,7 @@ dependencies = [
     "langchain-aws>=1.9.3",
     "langchain-google-genai>=4.5.0",
     "langchain-groq>=1.2.0",
+    "langgraph>=1.2.22",
     "pydantic>=2.14.3",
     "pypdf>=7.1.0",
     "pyyaml>=6.0.3",

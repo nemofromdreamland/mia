@@ -1,13 +1,22 @@
+import json
 from pathlib import Path
 
 import pytest
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
 from pdf_helper import make_text_pdf, write_text_pdf
 
+from mia.llm import LLMInvalidOutputError
 from mia.prep_graph import (
     PrepError,
+    PrepInput,
+    PrepResult,
+    PrepValidationError,
+    build_prep_graph,
     check_plan_coverage,
     check_screening_quotes,
     extract_cv_text,
+    run_prep,
 )
 from mia.schemas import InterviewPlan, Screening
 
@@ -153,3 +162,109 @@ def test_check_coverage_reports_all_problems_not_just_first() -> None:
     plan = _plan()
     plan.questions[1].id = "q1"
     assert len(check_plan_coverage(screening, plan, "hr")) == 3
+
+
+# ---------- graph (R4, R5, R7, R9-R12) ----------
+
+JOB = "Vaga fictícia: Analista de Dados Júnior na Empresa Imaginária. Contato: rh@exemplo.com"
+
+
+def _fake(*replies: str) -> GenericFakeChatModel:
+    return GenericFakeChatModel(messages=iter([AIMessage(content=r) for r in replies]))
+
+
+def _ok_replies() -> tuple[str, str]:
+    return SCREENING_JSON.read_text(encoding="utf-8"), PLAN_JSON.read_text(encoding="utf-8")
+
+
+def _input(cv_path: Path = CV_MD) -> PrepInput:
+    return PrepInput(
+        cv_path=cv_path,
+        job_text=JOB,
+        persona="technical",
+        level="junior",
+        estimated_minutes=15,
+    )
+
+
+def _records(runs_dir: Path) -> list[dict]:
+    lines = [
+        line
+        for file in sorted(runs_dir.glob("*.jsonl"))
+        for line in file.read_text(encoding="utf-8").splitlines()
+    ]
+    return [json.loads(line) for line in lines if line]
+
+
+def test_feliz_completo_with_pdf(tmp_path: Path) -> None:
+    result = run_prep(
+        _input(CV_PDF),
+        chat_model=_fake(*_ok_replies()),
+        runs_dir=tmp_path,
+        session_id="s1",
+        experiment="t",
+    )
+    assert isinstance(result, PrepResult)
+    assert result.screening.job_title == "Analista de Dados Júnior"
+    assert result.plan.persona == "technical"
+    records = _records(tmp_path)
+    assert [r["prompt_name"] for r in records] == ["screening", "planner"]
+    assert {r["session_id"] for r in records} == {"s1"}
+
+
+def test_models_never_see_personal_data(tmp_path: Path) -> None:
+    run_prep(_input(), chat_model=_fake(*_ok_replies()), runs_dir=tmp_path)
+    raw = json.dumps(_records(tmp_path), ensure_ascii=False)
+    for personal in ["bruna.lopes@exemplo.com.br", "98765-4321", "Bruna", "rh@exemplo.com"]:
+        assert personal not in raw
+    assert "[EMAIL]" in raw
+
+
+def test_planner_receives_screening_json_and_request(tmp_path: Path) -> None:
+    run_prep(_input(), chat_model=_fake(*_ok_replies()), runs_dir=tmp_path)
+    planner = _records(tmp_path)[1]["input"]
+    assert planner["persona"] == "technical"
+    assert planner["level"] == "junior"
+    assert planner["estimated_minutes"] == "15"
+    assert json.loads(planner["screening"])["fit_score"] == 72
+
+
+def test_invented_quote_raises_with_artifacts(tmp_path: Path) -> None:
+    screening = json.loads(_ok_replies()[0])
+    screening["strengths"][0]["cv_quote"] = "Liderei uma equipe de 50 pessoas"
+    fake = _fake(json.dumps(screening), _ok_replies()[1])
+    with pytest.raises(PrepValidationError) as info:
+        run_prep(_input(), chat_model=fake, runs_dir=tmp_path)
+    assert "Liderei uma equipe de 50 pessoas" in info.value.problems[0]
+    assert info.value.screening is not None
+    assert info.value.plan is not None
+
+
+def test_several_problems_are_all_reported(tmp_path: Path) -> None:
+    screening = json.loads(_ok_replies()[0])
+    screening["strengths"][0]["cv_quote"] = "Citação inventada"
+    screening["competencies"].append("Estatística")
+    fake = _fake(json.dumps(screening), _ok_replies()[1])
+    with pytest.raises(PrepValidationError) as info:
+        run_prep(_input(), chat_model=fake, runs_dir=tmp_path)
+    assert len(info.value.problems) == 2
+
+
+def test_invalid_screening_stops_before_planner(tmp_path: Path) -> None:
+    fake = _fake("não é json", "ainda não")
+    with pytest.raises(LLMInvalidOutputError):
+        run_prep(_input(), chat_model=fake, runs_dir=tmp_path)
+    assert [r["prompt_name"] for r in _records(tmp_path)] == ["screening"]
+
+
+def test_bad_cv_file_fails_without_calling_model(tmp_path: Path) -> None:
+    path = tmp_path / "cv.docx"
+    path.write_text("x", encoding="utf-8")
+    with pytest.raises(PrepError, match=r"cv\.docx"):
+        run_prep(_input(path), chat_model=_fake(), runs_dir=tmp_path)
+    assert _records(tmp_path) == []
+
+
+def test_build_prep_graph_has_the_five_nodes() -> None:
+    graph = build_prep_graph(chat_model=_fake())
+    assert {"extract", "mask", "screen", "plan", "validate"} <= set(graph.get_graph().nodes)
