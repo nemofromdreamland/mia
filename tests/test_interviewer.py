@@ -8,13 +8,17 @@ import pytest
 from pydantic import ValidationError
 
 from mia.interviewer import (
+    InterviewError,
     InterviewLimits,
     InterviewState,
+    StepResult,
+    TimeStatus,
+    answer,
     next_question,
     start,
     time_check,
 )
-from mia.schemas import InterviewPlan, Phase, Turn
+from mia.schemas import AnswerScore, InterviewPlan, Phase, Question, ToolDecision, Turn
 
 PLAN_PATH = Path(__file__).parent / "fixtures" / "prep" / "plan_ok.json"
 T0 = datetime(2026, 11, 15, 12, 0, tzinfo=UTC)
@@ -111,3 +115,169 @@ def test_turn_limit_ends(plan: InterviewPlan) -> None:
     assert time_check(state, T0, InterviewLimits()).over is True
     state = state.model_copy(update={"turn_count": 29})
     assert time_check(state, T0, InterviewLimits()).over is False
+
+
+# --- answer: validation, masking, follow-up vs next question -----------------
+
+
+class FakeDecider:
+    """Returns the queued decisions in order and records what it received."""
+
+    def __init__(self, *decisions: ToolDecision) -> None:
+        self.decisions = list(decisions)
+        self.calls: list[tuple[Question, str, TimeStatus]] = []
+
+    def __call__(
+        self, question: Question, answer: str, state: InterviewState, status: TimeStatus
+    ) -> ToolDecision:
+        self.calls.append((question, answer, status))
+        return self.decisions.pop(0)
+
+
+def follow(text: str | None = "E qual foi o resultado?") -> ToolDecision:
+    return ToolDecision(action="follow_up", follow_up_text=text, reason="faltou resultado")
+
+
+def advance() -> ToolDecision:
+    return ToolDecision(action="next_question", reason="cobriu")
+
+
+def no_score(question: Question, answer: str) -> AnswerScore:
+    raise AssertionError("scorer not used in this test")
+
+
+def reply(state: InterviewState, text: str, decider: FakeDecider, minute: int = 1) -> StepResult:
+    return answer(
+        state,
+        text,
+        decider=decider,
+        writer=fake_writer,
+        scorer=no_score,
+        clock=clock_at(T0 + timedelta(minutes=minute)),
+    )
+
+
+def test_follow_up_stays_on_question(plan: InterviewPlan) -> None:
+    result = reply(started(plan), "Fiz um painel.", FakeDecider(follow()))
+    assert result.next_turn.is_follow_up is True
+    assert result.next_turn.question_id == "q1"
+    assert result.next_turn.turn_no == 2
+    assert result.next_turn.interviewer_text == "[opening] E qual foi o resultado?"
+    assert result.state.follow_ups_used == 1
+    assert result.state.turn_count == 2
+    assert result.state.current_index == 0
+
+
+def test_answered_turn_keeps_answer_and_decision(plan: InterviewPlan) -> None:
+    result = reply(started(plan), "Fiz um painel.", FakeDecider(follow()))
+    assert result.answered.turn_no == 1
+    assert result.answered.answer_text == "Fiz um painel."
+    assert result.answered.decision == follow()
+    assert result.state.turns == [result.answered, result.next_turn]
+
+
+def test_max_two_follow_ups_then_advance(plan: InterviewPlan) -> None:
+    decider = FakeDecider(follow(), follow(), follow())
+    state = started(plan)
+    for _ in range(2):
+        state = reply(state, "Resposta.", decider).state
+    assert state.follow_ups_used == 2
+    result = reply(state, "Resposta.", decider)
+    assert result.next_turn.question_id == "q2"
+    assert result.next_turn.is_follow_up is False
+    assert result.state.follow_ups_used == 0
+    assert result.answered.decision is not None
+    assert result.answered.decision.action == "follow_up"  # original LLM decision kept
+
+
+@pytest.mark.parametrize("text", [None, "", "   "])
+def test_follow_up_without_text_advances(plan: InterviewPlan, text: str | None) -> None:
+    decision = ToolDecision.model_construct(action="follow_up", follow_up_text=text, reason="x")
+    result = reply(started(plan), "Resposta.", FakeDecider(decision))
+    assert result.next_turn.question_id == "q2"
+
+
+def test_next_question_advances_and_resets(plan: InterviewPlan) -> None:
+    state = reply(started(plan), "Resposta.", FakeDecider(follow())).state
+    result = reply(state, "Resposta.", FakeDecider(advance()))
+    assert result.state.current_index == 1
+    assert result.state.follow_ups_used == 0
+    assert result.next_turn.question_id == "q2"
+    assert result.next_turn.interviewer_text == f"[projects] {plan.questions[1].text}"
+
+
+def test_early_end_from_llm_is_ignored(plan: InterviewPlan) -> None:
+    decision = ToolDecision(action="end", reason="acho que basta")
+    result = reply(started(plan), "Resposta.", FakeDecider(decision))
+    assert result.state.ended is False
+    assert result.next_turn.question_id == "q2"
+
+
+def test_decider_gets_question_and_time(plan: InterviewPlan) -> None:
+    decider = FakeDecider(advance())
+    reply(started(plan), "Resposta.", decider, minute=5)
+    question, _, status = decider.calls[0]
+    assert question.id == "q1"
+    assert status.minutes_left == pytest.approx(10.0)
+
+
+def test_answer_is_masked_before_llm(plan: InterviewPlan) -> None:
+    decider = FakeDecider(advance())
+    result = reply(started(plan), "Meu e-mail é ana@exemplo.com.", decider)
+    assert "ana@exemplo.com" not in decider.calls[0][1]
+    assert "[EMAIL]" in decider.calls[0][1]
+    assert result.answered.answer_text is not None
+    assert "[EMAIL]" in result.answered.answer_text
+
+
+@pytest.mark.parametrize("text", ["", "   \n"])
+def test_empty_answer_rejected(plan: InterviewPlan, text: str) -> None:
+    decider = FakeDecider()
+    with pytest.raises(InterviewError):
+        reply(started(plan), text, decider)
+    assert decider.calls == []
+
+
+def test_too_long_answer_rejected(plan: InterviewPlan) -> None:
+    decider = FakeDecider()
+    with pytest.raises(InterviewError):
+        reply(started(plan), "a" * 4001, decider)
+    assert decider.calls == []
+    reply(started(plan), "a" * 4000, FakeDecider(advance()))  # limit itself is fine
+
+
+def test_answer_on_ended_interview_rejected(plan: InterviewPlan) -> None:
+    state = started(plan).model_copy(update={"ended": True, "end_reason": "visitor"})
+    with pytest.raises(InterviewError):
+        reply(state, "Resposta.", FakeDecider())
+
+
+def test_answer_does_not_mutate_state(plan: InterviewPlan) -> None:
+    state = started(plan)
+    before = state.model_dump()
+    reply(state, "Resposta.", FakeDecider(follow()))
+    assert state.model_dump() == before
+
+
+def test_writer_gets_recent_history_only(plan: InterviewPlan) -> None:
+    seen: list[list[Turn]] = []
+
+    def spy(phase: Phase, question: str, instruction: str, history: list[Turn]) -> str:
+        seen.append(history)
+        return question
+
+    state, _ = start("s1", plan, writer=spy, clock=clock_at(T0))
+    decider = FakeDecider(*[follow(), follow(), advance()] * 3)
+    limits = InterviewLimits(history_turns=2)
+    for _ in range(8):
+        state = answer(
+            state,
+            "R.",
+            decider=decider,
+            writer=spy,
+            scorer=no_score,
+            clock=clock_at(T0),
+            limits=limits,
+        ).state
+    assert all(len(h) <= 2 for h in seen)
+    assert seen[-1][-1].answer_text == "R."

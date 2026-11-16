@@ -11,16 +11,19 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from mia.schemas import InterviewPlan, Phase, Question, Turn
+from mia.pii import mask_text
+from mia.schemas import AnswerScore, InterviewPlan, Phase, Question, ToolDecision, Turn
 
 EndReason = Literal["plan_done", "time_or_turns", "visitor"]
 
 Writer = Callable[[Phase, str, str, list[Turn]], str]  # phase, question, instruction, history
 Clock = Callable[[], datetime]
+Scorer = Callable[[Question, str], AnswerScore]
 
 ASK_INSTRUCTION = (
     "Faça a pergunta abaixo ao candidato, com uma frase curta de transição se fizer sentido."
 )
+FOLLOW_UP_INSTRUCTION = "Aprofunde a resposta anterior fazendo a pergunta abaixo, sem avaliar."
 
 
 class InterviewError(Exception):
@@ -28,12 +31,17 @@ class InterviewError(Exception):
 
 
 class InterviewLimits(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     max_turns: int = 30
     max_follow_ups: int = 2
     max_answer_chars: int = 4000
     hard_max_minutes: int = 15
     slack_minutes: int = 3
     history_turns: int = 6
+
+
+DEFAULT_LIMITS = InterviewLimits()
 
 
 class InterviewState(BaseModel):
@@ -53,6 +61,9 @@ class InterviewState(BaseModel):
 class TimeStatus(BaseModel):
     over: bool
     minutes_left: float
+
+
+Decider = Callable[[Question, str, InterviewState, TimeStatus], ToolDecision]
 
 
 def current_question(state: InterviewState) -> Question:
@@ -100,3 +111,86 @@ def start(
         turns=[turn],
     )
     return state, turn
+
+
+class StepResult(BaseModel):
+    state: InterviewState
+    answered: Turn  # the answered turn, with decision (score comes in step 3)
+    next_turn: Turn  # next speech: follow-up or next question
+
+
+def _validate_answer(state: InterviewState, text: str, limits: InterviewLimits) -> None:
+    if state.ended:
+        raise InterviewError("the interview has already ended")
+    if not text.strip():
+        raise InterviewError("the answer is empty")
+    if len(text) > limits.max_answer_chars:
+        raise InterviewError(f"the answer exceeds {limits.max_answer_chars} characters")
+
+
+def _wants_follow_up(
+    decision: ToolDecision, state: InterviewState, limits: InterviewLimits
+) -> bool:
+    """The LLM only suggests: a follow-up needs text and a free slot (the code decides)."""
+    has_text = bool(decision.follow_up_text and decision.follow_up_text.strip())
+    return (
+        decision.action == "follow_up"
+        and has_text
+        and state.follow_ups_used < limits.max_follow_ups
+    )
+
+
+def _history(turns: list[Turn], limits: InterviewLimits) -> list[Turn]:
+    return turns[-limits.history_turns :]
+
+
+def answer(
+    state: InterviewState,
+    text: str,
+    *,
+    decider: Decider,
+    writer: Writer,
+    scorer: Scorer,
+    clock: Clock,
+    limits: InterviewLimits = DEFAULT_LIMITS,
+) -> StepResult:
+    """Apply the candidate's answer and return the new state, the answered turn and the next one."""
+    _validate_answer(state, text, limits)
+    masked = mask_text(text)
+    now = clock()
+    question = current_question(state)
+    status = time_check(state, now, limits)
+    decision = decider(question, masked, state, status)
+
+    answered = state.turns[-1].model_copy(update={"answer_text": masked, "decision": decision})
+    turns = [*state.turns[:-1], answered]
+    history = _history(turns, limits)
+
+    if _wants_follow_up(decision, state, limits):
+        assert decision.follow_up_text is not None
+        index, follow_ups, is_follow_up = state.current_index, state.follow_ups_used + 1, True
+        speech = writer(question.phase, decision.follow_up_text, FOLLOW_UP_INSTRUCTION, history)
+    else:
+        upcoming = next_question(state)
+        if upcoming is None:
+            raise NotImplementedError("closing the interview comes in step 3")
+        index, follow_ups, is_follow_up = state.current_index + 1, 0, False
+        speech = writer(upcoming.phase, upcoming.text, ASK_INSTRUCTION, history)
+
+    next_turn = Turn(
+        session_id=state.session_id,
+        turn_no=state.turn_count + 1,
+        question_id=state.plan.questions[index].id,
+        interviewer_text=speech,
+        is_follow_up=is_follow_up,
+        created_at=now,
+    )
+    new_state = state.model_copy(
+        update={
+            "current_index": index,
+            "follow_ups_used": follow_ups,
+            "turn_count": state.turn_count + 1,
+            "turns": [*turns, next_turn],
+        }
+    )
+    return StepResult(state=new_state, answered=answered, next_turn=next_turn)
