@@ -21,6 +21,33 @@ def test_masks_personal_data(text: str, expected: str) -> None:
 
 
 @pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("linkedin.com/in/ana-souza", "[URL]"),
+        ("https://github.com/anasouza", "[URL]"),
+        ("https://www.linkedin.com/in/ana-souza/.", "[URL]."),
+        ("GitHub: github.com/anasouza, Insta: instagram.com/ana", "GitHub: [URL], Insta: [URL]"),
+        ("https://twitter.com/ana e x.com/ana", "[URL] e [URL]"),
+        ("https://ana.medium.com/post-1", "[URL]"),
+    ],
+)
+def test_masks_personal_urls(text: str, expected: str) -> None:
+    assert mask_text(text) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "veja https://docs.python.org/3/",
+        "baixe de https://box.com/arquivo",
+        "https://example.com/github.com-guide",
+    ],
+)
+def test_keeps_non_personal_urls(text: str) -> None:
+    assert mask_text(text) == text
+
+
+@pytest.mark.parametrize(
     "text",
     [
         "2019–2023, Python 3.12, R$ 8.500,00, 35%",
