@@ -23,9 +23,6 @@ EXPECTED: dict[str, tuple[str, str, Level, Persona]] = {
 CASE_IDS: tuple[str, ...] = tuple(EXPECTED)
 TEXT_FILES: tuple[str, ...] = ("cv.md", "job.md")
 
-# Step 1 only writes case.yaml; cv.md/job.md arrive in steps 2-3.
-TEXTS_PENDING = pytest.mark.skip(reason="cv.md/job.md are written in steps 2-3")
-
 
 def _load_case(case_id: str) -> Case:
     raw = (CASES_DIR / case_id / "case.yaml").read_text(encoding="utf-8")
@@ -52,7 +49,6 @@ def test_case_yaml_is_valid_and_matches_table(case_id: str) -> None:
     assert case.version == 1
 
 
-@TEXTS_PENDING
 @pytest.mark.parametrize("case_id", CASE_IDS)
 @pytest.mark.parametrize("name", TEXT_FILES)
 def test_text_file_exists_with_250_to_400_words(case_id: str, name: str) -> None:
@@ -61,7 +57,6 @@ def test_text_file_exists_with_250_to_400_words(case_id: str, name: str) -> None
     assert 250 <= _words(path) <= 400
 
 
-@TEXTS_PENDING
 @pytest.mark.parametrize("case_id", CASE_IDS)
 @pytest.mark.parametrize("name", TEXT_FILES)
 def test_text_file_has_no_personal_data(case_id: str, name: str) -> None:
