@@ -450,6 +450,16 @@ class GoldenItem(BaseModel):
 
 Os conjuntos B, C e D seguem o mesmo padrão: um JSONL por conjunto, com entrada, esperado e `split`. O conjunto C usa os 5 casos de `cases/`.
 
+**Conjuntos B, C e D** · modelos em `schemas.py` (campos extras proibidos; decidido na spec 2.4)
+
+| Conjunto | Arquivo | Modelo | Entrada | `expected` |
+| --- | --- | --- | --- | --- |
+| B. Ferramentas | `evals/datasets/tools.jsonl` | `ToolMomentItem` | `question_id`, `answer`, `follow_ups_left`, `minutes_left`, `history` (variáveis do prompt `follow_up`) | `action`; `follow_up_must_address` (1–2 `look_for`) só em `follow_up` |
+| C. Plano | `evals/datasets/plans.jsonl` | `PlanCaseItem` | `cv_path`, `job_path`, `persona`, `language`; `source` = `case` ou `extra` | `job_requirements` (3–8), `gap_keywords` (1–4) |
+| D. Robustez | `evals/datasets/robustness.jsonl` | `RobustnessItem` | `attack_type`; resposta (`question_id`, `answer_text`) ou documento (`target`, `base_case_id`, `injected_text`) | `max_score`, `forbidden_in_summary`, `must_not_contain` |
+
+Regras de coerência são validadas no modelo: `follow_up` esperado exige folga (`follow_ups_left > 0` e `minutes_left > 0`); ataques na resposta exigem `max_score`; `personal_data` exige `forbidden_in_summary`; `doc_injection` exige `must_not_contain`.
+
 ## Erros e validação
 
 Todo erro sai no formato `{"error": {"code": "...", "message": "...", "retryable": bool}}`.

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Persona = Literal["hr", "technical", "manager"]
 Language = Literal["pt-BR", "en-US"]
@@ -223,6 +223,114 @@ class GoldenItem(BaseModel):
     human_score: int | None = Field(default=None, ge=1, le=5)
     split: Literal["dev", "test"] | None = None
     generated_by: str
+
+
+Split = Literal["dev", "test"]
+AttackType = Literal["answer_injection", "doc_injection", "personal_data", "format_variation"]
+_ANSWER_ATTACKS: frozenset[str] = frozenset(
+    {"answer_injection", "personal_data", "format_variation"}
+)
+
+
+class _EvalModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ToolExpected(_EvalModel):
+    action: Literal["follow_up", "next_question", "end"]
+    follow_up_must_address: list[str] = []  # look_for items the follow-up must cover
+
+    @model_validator(mode="after")
+    def _address_matches_action(self) -> "ToolExpected":
+        size = len(self.follow_up_must_address)
+        if self.action == "follow_up" and not 1 <= size <= 2:
+            raise ValueError("follow_up needs 1-2 follow_up_must_address items")
+        if self.action != "follow_up" and size:
+            raise ValueError("follow_up_must_address only applies to follow_up")
+        return self
+
+
+class ToolMomentItem(_EvalModel):
+    """Set B item: one moment of the follow_up prompt and the expected decision."""
+
+    item_id: str
+    question_id: str
+    answer: str
+    follow_ups_left: int = Field(ge=0, le=2)
+    minutes_left: float
+    history: str
+    expected: ToolExpected
+    split: Split
+    note: str
+
+    @model_validator(mode="after")
+    def _follow_up_needs_room(self) -> "ToolMomentItem":
+        no_room = self.follow_ups_left == 0 or self.minutes_left <= 0
+        if self.expected.action == "follow_up" and no_room:
+            raise ValueError("follow_up expected but there is no room (follow-ups or time)")
+        return self
+
+
+class PlanExpected(_EvalModel):
+    job_requirements: list[str] = Field(min_length=3, max_length=8)
+    gap_keywords: list[str] = Field(min_length=1, max_length=4)
+
+
+class PlanCaseItem(_EvalModel):
+    """Set C item: a CV/job pair (paths from the repo root) and what the plan must cover."""
+
+    item_id: str
+    source: Literal["case", "extra"]
+    cv_path: str
+    job_path: str
+    persona: Persona
+    language: Language
+    expected: PlanExpected
+    split: Split
+
+
+class RobustnessExpected(_EvalModel):
+    max_score: int | None = Field(default=None, ge=1, le=5)
+    forbidden_in_summary: list[str] = []
+    must_not_contain: list[str] = []
+
+
+class RobustnessItem(_EvalModel):
+    """Set D item: an attack on the answer (judge/summary) or on the CV/job (CLI prep)."""
+
+    item_id: str
+    attack_type: AttackType
+    question_id: str | None = None
+    answer_text: str | None = None
+    target: Literal["cv", "job"] | None = None
+    base_case_id: str | None = None
+    injected_text: str | None = None
+    expected: RobustnessExpected
+    split: Split
+    note: str
+
+    @model_validator(mode="after")
+    def _fields_match_attack(self) -> "RobustnessItem":
+        if self.attack_type in _ANSWER_ATTACKS:
+            required = {
+                "question_id": self.question_id,
+                "answer_text": self.answer_text,
+                "max_score": self.expected.max_score,
+            }
+        else:
+            required = {
+                "target": self.target,
+                "base_case_id": self.base_case_id,
+                "injected_text": self.injected_text,
+            }
+        missing = [name for name, value in required.items() if value is None]
+        if self.attack_type == "personal_data" and not self.expected.forbidden_in_summary:
+            missing.append("forbidden_in_summary")
+        if self.attack_type == "doc_injection" and not self.expected.must_not_contain:
+            missing.append("must_not_contain")
+        if missing:
+            raise ValueError(f"{self.attack_type} requires: {', '.join(missing)}")
+        return self
 
 
 # ---------- Runs ----------
