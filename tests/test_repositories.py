@@ -3,12 +3,16 @@ from datetime import UTC, datetime
 import pytest
 
 from mia.repositories import (
+    CandidateCounter,
+    InMemoryCandidateCounter,
+    InMemoryReportStore,
     InMemorySessionRepository,
+    ReportStore,
     SessionConflictError,
     SessionNotFoundError,
     SessionRepository,
 )
-from mia.schemas import Session, Turn
+from mia.schemas import CandidateSummary, Report, Session, SummaryPoint, Turn
 
 T0 = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
 T1 = datetime(2026, 11, 16, 12, 5, tzinfo=UTC)
@@ -142,3 +146,87 @@ def test_put_turn_other_visitor_raises_not_found(repo: InMemorySessionRepository
 def test_list_turns_other_visitor_raises_not_found(repo: InMemorySessionRepository) -> None:
     with pytest.raises(SessionNotFoundError):
         repo.list_turns("outro", "01SESSION")
+
+
+def _completed(
+    session_id: str, case_id: str | None = "case_a", visitor_id: str = "local"
+) -> Session:
+    return make_session(session_id, visitor_id).model_copy(
+        update={"status": "completed", "case_id": case_id}
+    )
+
+
+def test_list_sessions_only_from_visitor_newest_first() -> None:
+    repo = InMemorySessionRepository()
+    old = make_session("01OLD", "a")
+    new = make_session("01NEW", "a").model_copy(update={"created_at": T1})
+    repo.create_session(old)
+    repo.create_session(new)
+    repo.create_session(make_session("01OTHER", "b"))
+    assert [s.session_id for s in repo.list_sessions("a")] == ["01NEW", "01OLD"]
+    assert repo.list_sessions("nobody") == []
+
+
+def test_list_completed_filters_status_and_case(repo: InMemorySessionRepository) -> None:
+    repo.create_session(_completed("01A1", "case_a", "a"))
+    repo.create_session(_completed("01B1", "case_b", "b"))
+    repo.create_session(make_session("01OPEN", "a"))
+    assert {s.session_id for s in repo.list_completed()} == {"01A1", "01B1"}
+    assert [s.session_id for s in repo.list_completed("case_a")] == ["01A1"]
+
+
+def test_delete_session_removes_session_and_turns(repo: InMemorySessionRepository) -> None:
+    repo.put_turn("local", make_turn(1))
+    repo.delete_session("local", "01SESSION")
+    with pytest.raises(SessionNotFoundError):
+        repo.get_session("local", "01SESSION")
+    with pytest.raises(SessionNotFoundError):
+        repo.list_turns("local", "01SESSION")
+    assert repo.list_sessions("local") == []
+
+
+def test_delete_other_visitor_raises_not_found(repo: InMemorySessionRepository) -> None:
+    with pytest.raises(SessionNotFoundError):
+        repo.delete_session("intruder", "01SESSION")
+    assert repo.get_session("local", "01SESSION").session_id == "01SESSION"
+
+
+def _report() -> tuple[Report, CandidateSummary]:
+    point = SummaryPoint(point="Clareza", answer_quote="eu usaria")
+    summary = CandidateSummary(
+        headline="Boa base",
+        summary="Resumo.",
+        strengths=[point],
+        concerns=[point],
+        suggested_next_step="advance",
+        next_step_reason="Motivo.",
+    )
+    report = Report(overall_score=4.0, competencies=[], strengths=[], improvements=[])
+    return report, summary
+
+
+def test_report_store_save_load_delete() -> None:
+    store = InMemoryReportStore()
+    assert isinstance(store, ReportStore)
+    report, summary = _report()
+    store.save("01S", report, summary)
+    assert store.load("01S") == (report, summary)
+    store.delete("01S")
+    with pytest.raises(SessionNotFoundError):
+        store.load("01S")
+    store.delete("01S")  # deleting twice is harmless
+
+
+def test_report_store_returns_copies() -> None:
+    store = InMemoryReportStore()
+    report, summary = _report()
+    store.save("01S", report, summary)
+    loaded, _ = store.load("01S")
+    loaded.strengths.append("mutated")
+    assert store.load("01S")[0].strengths == []
+
+
+def test_candidate_counter_is_sequential_per_case() -> None:
+    counter = InMemoryCandidateCounter()
+    assert isinstance(counter, CandidateCounter)
+    assert [counter.next("a"), counter.next("a"), counter.next("b")] == [1, 2, 1]
