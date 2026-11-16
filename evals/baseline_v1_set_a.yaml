@@ -1,0 +1,42 @@
+# Baseline v1, set A (judge vs. human scores) through Promptfoo. The real prompt lives in
+# prompts/judge/v<N>.yaml and is loaded by mia.judge; "prompt" below is only a marker.
+# One provider per model (label = model id). Full run: use --no-cache so every call writes a RunRecord.
+description: "MIA baseline v1 - set A (judge vs. human scores)"
+
+prompts:
+  - "{{item_id}}"
+
+providers:
+  - id: file://providers/judge_provider.py
+    label: us.anthropic.claude-haiku-4-5-20251001-v1:0
+    config:
+      model: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+      experiment: baseline_v1_set_a
+      pythonExecutable: .venv/Scripts/python.exe
+  - id: file://providers/judge_provider.py
+    label: us.amazon.nova-pro-v1:0
+    config:
+      model: "bedrock:us.amazon.nova-pro-v1:0"
+      experiment: baseline_v1_set_a
+      pythonExecutable: .venv/Scripts/python.exe
+  - id: file://providers/judge_provider.py
+    label: mistral.mistral-large-3-675b-instruct
+    config:
+      model: "bedrock:mistral.mistral-large-3-675b-instruct"
+      experiment: baseline_v1_set_a
+      pythonExecutable: .venv/Scripts/python.exe
+
+tests: file://tests_set_a.py:generate_tests   # all 70 items; pass config {split: dev|test} to filter
+
+defaultTest:
+  assert:
+    - type: python
+      value: file://assertions/judge_asserts.py:assert_schema
+    - type: python
+      value: file://assertions/judge_asserts.py:assert_quotes_verified
+    - type: python
+      value: file://assertions/judge_asserts.py:assert_score_within_one
+
+evaluateOptions:
+  maxConcurrency: 2
+  cache: true

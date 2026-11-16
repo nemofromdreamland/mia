@@ -46,6 +46,12 @@ models:
     usd_per_mtok_input: 0.33
     usd_per_mtok_output: 2.75
 
+  # Second baseline model (task 2.7). Profile id from `aws bedrock list-inference-profiles`; price
+  # from the AWS Price List API (USE1-NovaPro-input-tokens / -output-tokens, on-demand, 2026-11-16).
+  "bedrock:us.amazon.nova-pro-v1:0":
+    usd_per_mtok_input: 0.80
+    usd_per_mtok_output: 3.20
+
   "bedrock:mistral.mistral-large-3-675b-instruct":
     usd_per_mtok_input: 0.50
     usd_per_mtok_output: 1.50

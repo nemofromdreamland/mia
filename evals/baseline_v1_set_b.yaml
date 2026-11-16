@@ -1,6 +1,6 @@
-# Baseline v1, set B (follow_up) through Promptfoo. The real prompt lives in
+# Baseline v1, set B (follow_up tool decision) through Promptfoo. The real prompt lives in
 # prompts/follow_up/v<N>.yaml and is loaded by mia.interviewer; "prompt" below is only a marker.
-# Step 2: Haiku only. Step 4 adds the other two models (one provider per model).
+# One provider per model (label = model id). Full run: use --no-cache so every call writes a RunRecord.
 description: "MIA baseline v1 - set B (follow_up tool decision)"
 
 prompts:
@@ -11,6 +11,18 @@ providers:
     label: us.anthropic.claude-haiku-4-5-20251001-v1:0
     config:
       model: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+      experiment: baseline_v1_set_b
+      pythonExecutable: .venv/Scripts/python.exe
+  - id: file://providers/follow_up_provider.py
+    label: us.amazon.nova-pro-v1:0
+    config:
+      model: "bedrock:us.amazon.nova-pro-v1:0"
+      experiment: baseline_v1_set_b
+      pythonExecutable: .venv/Scripts/python.exe
+  - id: file://providers/follow_up_provider.py
+    label: mistral.mistral-large-3-675b-instruct
+    config:
+      model: "bedrock:mistral.mistral-large-3-675b-instruct"
       experiment: baseline_v1_set_b
       pythonExecutable: .venv/Scripts/python.exe
 
