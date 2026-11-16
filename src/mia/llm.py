@@ -75,6 +75,7 @@ class ModelSpec(BaseModel):
     usd_per_mtok_output: float = Field(ge=0)
     free_tier: bool = False  # True: free usage; price is the published paid rate (reference)
     max_retries: StrictInt = Field(default=2, ge=0)  # extra attempts after the first call
+    request_timeout_seconds: float = Field(default=60.0, gt=0)
 
 
 class ModelsConfig(BaseModel):
@@ -163,7 +164,15 @@ def resolve_model(ref: str | None, config: ModelsConfig) -> ModelSpec:
 
 def build_chat_model(spec: ModelSpec, params: dict[str, Any]) -> BaseChatModel:
     """The single place that instantiates a provider model."""
-    return init_chat_model(spec.model, model_provider=LANGCHAIN_PROVIDERS[spec.provider], **params)
+    model_params = dict(params)
+    if spec.provider == "gemini":
+        model_params.setdefault("request_timeout", spec.request_timeout_seconds)
+        # Retry once, in this module, under the catalog policy. The provider adapter's
+        # own retries would multiply attempts and make the timeout effectively unbounded.
+        model_params["max_retries"] = 0
+    return init_chat_model(
+        spec.model, model_provider=LANGCHAIN_PROVIDERS[spec.provider], **model_params
+    )
 
 
 def estimate_cost(spec: ModelSpec, input_tokens: int, output_tokens: int) -> float:

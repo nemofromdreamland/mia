@@ -288,7 +288,44 @@ def test_build_chat_model_calls_init_chat_model_with_langchain_provider(
     result = build_chat_model(cfg.models[ref], {"temperature": 0.2})
 
     assert result is sentinel
-    assert calls == [((expected_model,), {"model_provider": expected_provider, "temperature": 0.2})]
+    expected_params = {"model_provider": expected_provider, "temperature": 0.2}
+    if ref.startswith("gemini:"):
+        expected_params["request_timeout"] = 60.0
+        expected_params["max_retries"] = 0
+    assert calls == [((expected_model,), expected_params)]
+
+
+def test_build_chat_model_gemini_explicit_timeout_overrides_catalog_default(
+    cfg: ModelsConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[dict[str, Any]] = []
+
+    def fake_init_chat_model(*args: Any, **kwargs: Any) -> object:
+        calls.append(kwargs)
+        return object()
+
+    monkeypatch.setattr(llm, "init_chat_model", fake_init_chat_model)
+
+    build_chat_model(cfg.models["gemini:test-flash"], {"request_timeout": 12.5})
+
+    assert calls[0]["request_timeout"] == 12.5
+
+
+def test_build_chat_model_gemini_uses_catalog_timeout_by_default(
+    cfg: ModelsConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[dict[str, Any]] = []
+
+    def fake_init_chat_model(*args: Any, **kwargs: Any) -> object:
+        calls.append(kwargs)
+        return object()
+
+    monkeypatch.setattr(llm, "init_chat_model", fake_init_chat_model)
+
+    build_chat_model(cfg.models["gemini:test-flash"], {})
+
+    assert calls[0]["request_timeout"] == 60.0
+    assert calls[0]["max_retries"] == 0
 
 
 @pytest.mark.parametrize(
@@ -554,7 +591,17 @@ def test_invoke_defaults_load_real_config_and_build_model_from_it(
     real = load_models_config()
     default = real.models[real.default]
     assert text == "ok"
-    assert built == [(default.model, {"model_provider": "google_genai", "temperature": 0})]
+    assert built == [
+        (
+            default.model,
+            {
+                "model_provider": "google_genai",
+                "temperature": 0,
+                "request_timeout": default.request_timeout_seconds,
+                "max_retries": 0,
+            },
+        )
+    ]
     (record,) = _read_records(_today_file(tmp_path, "adhoc"))
     assert record.cost_usd == estimate_cost(default, 1000, 1000)
 

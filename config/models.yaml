@@ -4,6 +4,7 @@
 # free_tier: true = we use the provider's free tier; the price is the published PAID rate,
 # kept as a reference cost so model-vs-model cost comparisons stay fair.
 # max_retries: extra attempts after a failed call (default 2), with exponential backoff.
+# request_timeout_seconds: per-request timeout for Gemini (default 60 seconds).
 #
 # Sources, checked on 2026-11-15:
 #   gemini  https://aistudio.google.com/docs/pricing (ai.google.dev/gemini-api/docs/pricing redirects here)
@@ -24,6 +25,7 @@ models:
     usd_per_mtok_input: 0.75
     usd_per_mtok_output: 3.75 # includes thinking tokens
     free_tier: true
+    request_timeout_seconds: 60
 
   "groq:openai/gpt-oss-120b":
     usd_per_mtok_input: 0.15
