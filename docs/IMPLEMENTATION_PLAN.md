@@ -16,7 +16,7 @@ Tudo que depende da AWS fica pronto até segunda à noite; terça fica só para 
 | --- | --- | --- |
 | Dom 15, 12h | Gate 0 decidido: Bedrock, AgentCore e Sonic testados | Aplicar os planos B do TRD e seguir |
 | Dom 15, 23h | Entrevista completa em texto pelo terminal (`mia simulate`) com relatório | Cortar o relatório em LangGraph para uma chamada só |
-| Seg 16, 14h | Baseline v1 rodada nos modelos do Bedrock, salva em `runs/` | Rodar só Haiku + Nova; resto depois com Gemini/Groq |
+| Seg 16, 14h | Baseline v1 rodada nos modelos do Bedrock, salva em `runs/` | Rodar só Haiku + Nova; resto depois (Bedrock segue ativo após terça) |
 | Seg 16, 23h | Modo texto no ar com URL | Plano B (Lambda + API Gateway) ou demo local gravada |
 | Ter 17, manhã | Vídeo de demo gravado; `runs/` e resultados commitados | — (obrigatório) |
 | Ter 17, tarde | Voz, se o Gate 0 aprovou | Voz fica fora |
@@ -44,7 +44,7 @@ flowchart TD
     F4 --> GF{"Free Plan fecha · 17/11"}
     F4 -. "se o Gate 0 aprovou" .-> F5["Fase 5 · Voz<br/>condicional · ter 17"]
     F5 --> GF
-    GF --> F6["Fase 6 · Depois de terça<br/>Gemini/Groq, HF Spaces, README"]
+    GF --> F6["Fase 6 · Depois de terça<br/>Bedrock + Groq, HF Spaces, README"]
 ```
 
 A Fase 1 é o gargalo: Avaliação e API só começam com o cérebro rodando no terminal. A 4.1 (tabelas e buckets em Terraform) pode adiantar para domingo à noite se a Fase 3 precisar de DynamoDB real.
@@ -68,7 +68,7 @@ Objetivo: descobrir em poucas horas se Bedrock, AgentCore e Sonic funcionam nest
 
 ## Fase 1: cérebro em texto
 
-Objetivo: uma entrevista completa rodando no terminal, sem API nem frontend. Desenvolva com Gemini ou Haiku; a lógica não muda entre provedores.
+Objetivo: uma entrevista completa rodando no terminal, sem API nem frontend. Desenvolva com Claude Haiku no Bedrock (`config/models.yaml`); a lógica não muda entre provedores. O Gemini 3.8 Flash saiu do desenvolvimento em 16/11 por falhas frequentes (503, JSON truncado, travamento).
 
 | ID | Tarefa | Quem | Entrega | Pronto quando |
 | --- | --- | --- | --- | --- |
@@ -89,12 +89,12 @@ Os repositórios de dados têm uma interface e duas implementações (memória e
 
 ## Fase 2: avaliação
 
-Objetivo: a baseline v1 nos modelos do Bedrock salva antes de segunda 14h; iterações v2 podem continuar depois com Gemini/Groq. Pode rodar em paralelo com a Fase 3.
+Objetivo: a baseline v1 nos modelos do Bedrock salva antes de segunda 14h; iterações v2 podem continuar depois no Bedrock e no Groq. Pode rodar em paralelo com a Fase 3.
 
 | ID | Tarefa | Quem | Entrega | Pronto quando |
 | --- | --- | --- | --- | --- |
 | 2.1 | Golden set: 10 perguntas (6 técnicas, 4 comportamentais) com `look_for` | Você + agente | `evals/datasets/questions.yaml` | Rubricas revisadas por você |
-| 2.2 | Gerar 70 respostas (5 níveis + enrolada + paráfrase) com Gemini via `synthetic_candidate` | Agente | `evals/datasets/judge_golden.jsonl` (sem nota) | 70 itens válidos no schema `GoldenItem` |
+| 2.2 | Gerar 70 respostas (5 níveis + enrolada + paráfrase) com Groq (gpt-oss-120b) via `synthetic_candidate`, família diferente do juiz (Claude) | Agente | `evals/datasets/judge_golden.jsonl` (sem nota) | 70 itens válidos no schema `GoldenItem` |
 | 2.3 | Dar as notas humanas sem ver o juiz; separar dev 70% / teste 30% | **Você** | `human_score` e `split` preenchidos | 70 notas; split estratificado por nível |
 | 2.4 | Conjuntos B (~40 momentos de ferramenta), C (vagas + CVs sintéticos) e D (injections) | Agente | `evals/datasets/*.jsonl` | Cada conjunto com `expected` e `split` |
 | 2.5 | Promptfoo com custom provider em Python chamando `src/mia` e assertions em Python | Agente | `evals/promptfooconfig.yaml`, `evals/assertions/` | `npx promptfoo eval` roda o conjunto A em um modelo |
@@ -155,13 +155,13 @@ Só começa se o Gate 0 aprovou o Sonic e a Fase 4 está no ar. Se a URL de voz 
 
 ## Fase 6: depois de terça
 
-Sem prazo e sem AWS: tudo roda com Gemini e Groq. É aqui que o projeto vira portfólio.
+Sem prazo. A conta AWS continua ativa (paga) depois de terça: o cérebro segue no Bedrock (Claude Haiku), com Groq e Gemini só na comparação. É aqui que o projeto vira portfólio.
 
 | ID | Tarefa | Quem | Entrega | Pronto quando |
 | --- | --- | --- | --- | --- |
-| 6.1 | Iterações v2/v3 dos prompts com Gemini e Groq; comparação entre provedores | Você + agente | `results/*.md` | Tabela com todos os modelos testados, incluindo os do Bedrock salvos antes |
+| 6.1 | Iterações v2/v3 dos prompts no Bedrock; comparação entre provedores (Bedrock, Groq, Gemini) | Você + agente | `results/*.md` | Tabela com todos os modelos testados, incluindo os do Bedrock salvos antes |
 | 6.2 | Red-team do Promptfoo no conjunto D | Agente | `results/redteam.md` | Taxa de ataques que funcionaram por categoria |
-| 6.3 | Versão permanente no Hugging Face Spaces: modo texto, os 5 casos, repositório em memória, Gemini, mesmas cotas | Agente | Space público | Recrutador consegue fazer uma simulação pelo link |
+| 6.3 | Versão permanente no Hugging Face Spaces: modo texto, os 5 casos, repositório em memória, Claude Haiku no Bedrock, mesmas cotas | Agente | Space público | Recrutador consegue fazer uma simulação pelo link |
 | 6.4 | README: objetivo, arquitetura, método, resultados, limitações, modelo de ameaças, vídeo | Você + agente | `README.md` | Explicável em 2 minutos com números |
 | 6.5 | ADRs finais e `docs/guia-de-prompts.md` com o que funcionou e o que piorou | Você | `docs/` | Uma decisão por arquivo, com suas palavras |
 | 6.6 | Bullets do currículo e pitch de 2 minutos | Você | CV atualizado | Números reais em cada bullet |

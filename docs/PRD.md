@@ -88,7 +88,7 @@ O MVP é o modo texto completo com os casos e a tela do recrutador; a voz é uma
 | CLI local | Simulação com CV e vaga avulsos (fictícios), geração das fixtures dos casos | Obrigatório |
 | Voz | Nova 2 Sonic usando as mesmas ferramentas do modo texto | Só se o Sonic em português passar na fase 0 e houver tempo antes de terça |
 | Inglês | Casos e entrevista em inglês (idioma já é parâmetro) | Depois do MVP |
-| Versão permanente | Modo texto no Hugging Face Spaces com Gemini | Depois de terça |
+| Versão permanente | Modo texto no Hugging Face Spaces com Claude Haiku no Bedrock | Depois de terça |
 
 **Fora de escopo:** login, contas, upload na web, RAG, fine-tuning, áudio armazenado, WebRTC, app mobile.
 
@@ -153,9 +153,9 @@ O projeto é bem-sucedido quando cada linha abaixo tem um número real no README
 
 ## Premissas, restrições e riscos
 
-**Restrições.** A conta AWS está no Free Plan e fecha na terça (17/11); sem upgrade. Orçamento: créditos AWS restantes + free tiers de Gemini e Groq. Um desenvolvedor, nível júnior.
+**Restrições.** A conta AWS está no Free Plan até terça (17/11); depois disso o dono decidiu (16/11) mantê-la ativa e pagar o uso do Bedrock. Orçamento: créditos AWS restantes, depois uso pago do Bedrock + free tier do Groq (Gemini só na comparação). Um desenvolvedor, nível júnior.
 
-**Premissas.** Bedrock responde no Free Plan com cota maior que zero; Gemini free tier tem limite suficiente para os conjuntos de avaliação; o dono rotula manualmente o golden set e revisa os 5 casos.
+**Premissas.** Bedrock responde no Free Plan com cota maior que zero; Bedrock e Groq free tier têm limite suficiente para os conjuntos de avaliação; o dono rotula manualmente o golden set e revisa os 5 casos.
 
 | Risco | Impacto | Mitigação |
 | --- | --- | --- |
@@ -178,8 +178,8 @@ flowchart LR
     MVP["MVP em texto<br/>Dom 15 – seg 16<br/>Casos, entrevista, juiz<br/>Relatório e recrutador<br/>Conjuntos A–D"]
     DEP["Deploy e voz<br/>Seg 16 – ter 17<br/>Terraform e URL<br/>Vídeo de demo<br/>Voz, se der tempo"]
     GATE{{"Free Plan fecha · 17/11<br/>Deploy, vídeo e runs salvos"}}
-    POS["Depois de terça<br/>Sem prazo<br/>v2 com Gemini/Groq<br/>Hugging Face Spaces<br/>README e currículo"]
+    POS["Depois de terça<br/>Sem prazo<br/>v2 no Bedrock + Groq<br/>Hugging Face Spaces<br/>README e currículo"]
     F0 --> MVP --> DEP --> GATE --> POS
 ```
 
-A ordem segue a dependência da AWS: o que usa Bedrock, AgentCore ou Sonic precisa estar pronto, gravado e salvo em JSONL antes de terça. O que roda com Gemini/Groq continua depois, sem prazo.
+A ordem segue a dependência da AWS: o que usa Bedrock, AgentCore ou Sonic precisa estar pronto, gravado e salvo em JSONL antes de terça. O resto continua depois, sem prazo, no Bedrock (conta mantida e paga) e no Groq.

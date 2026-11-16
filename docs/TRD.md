@@ -37,7 +37,7 @@ flowchart TB
 
     INT <-- "mesmas ferramentas na voz" --> SONIC["Nova 2 Sonic<br/>Voz em tempo real (opcional)"]
     LLM --> BR["Amazon Bedrock<br/>Claude, Nova, Mistral + Guardrails"]
-    LLM --> GO["Gemini e Groq<br/>Comparação e pós-terça"]
+    LLM --> GO["Gemini e Groq<br/>Comparação; Groq gera candidatos sintéticos"]
     RT --> DDB["DynamoDB<br/>Sessões, turnos, cotas"]
     RT --> S3["Amazon S3<br/>Relatórios e resumos"]
     RT --> RUNS["runs/*.jsonl + Langfuse<br/>Registro de cada chamada"]
@@ -172,7 +172,7 @@ Quatro conjuntos fixos rodam pelo Promptfoo, que chama o código Python real (cu
 
 **Regras do golden set**
 
-- Respostas geradas por um modelo de outra família (ex.: Gemini gera, Claude julga), revisadas à mão.
+- Respostas geradas por um modelo de outra família (Groq gera, Claude julga), revisadas à mão.
 - O dono do projeto dá a nota antes de ver a nota do juiz.
 - Prompts são ajustados só no split dev; o número reportado vem do split teste.
 - Só dados sintéticos ou fictícios; nada real vai para planos gratuitos nem para o git.
@@ -220,7 +220,7 @@ Tudo em Terraform, região us-east-1, conta no Free Plan sem Organizations e sem
 2. Merge na main: build e push da imagem para o ECR, `terraform apply` com aprovação manual, deploy do frontend.
 3. Autenticação na AWS via OIDC, sem chaves de acesso no GitHub.
 
-**Plano B de execução:** se o AgentCore estiver bloqueado no Free Plan, a Lambda proxy é trocada por uma Lambda com o próprio FastAPI (Lambda Web Adapter) atrás do mesmo API Gateway, e a voz fica só em demo local gravada. O front não muda. **Depois de terça:** modo texto no Hugging Face Spaces com Gemini.
+**Plano B de execução:** se o AgentCore estiver bloqueado no Free Plan, a Lambda proxy é trocada por uma Lambda com o próprio FastAPI (Lambda Web Adapter) atrás do mesmo API Gateway, e a voz fica só em demo local gravada. O front não muda. **Depois de terça:** a conta AWS continua ativa (paga); modo texto no Hugging Face Spaces com Claude Haiku no Bedrock.
 
 ## Observabilidade e custo
 
