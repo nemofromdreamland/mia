@@ -59,4 +59,5 @@ prompt_models:
   planner: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
   report: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
   screening: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
-  synthetic_candidate: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+  # Another model family generates eval answers, so the judge (Claude) never grades its own family (TRD).
+  synthetic_candidate: "groq:openai/gpt-oss-120b"

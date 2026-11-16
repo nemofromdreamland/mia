@@ -363,10 +363,11 @@ def test_prompt_models_section_is_loaded_and_validated(tmp_path: Path) -> None:
         load_models_config(path)
 
 
-def test_real_models_config_routes_every_prompt_to_its_default() -> None:
+def test_real_models_config_routes_prompts_and_keeps_judge_family_apart() -> None:
     real = load_models_config()
-    assert real.prompt_models
-    assert set(real.prompt_models.values()) == {real.default}
+    routes = real.prompt_models
+    assert routes["judge"] == real.default
+    assert routes["synthetic_candidate"].split(":")[0] != routes["judge"].split(":")[0]
 
 
 # ---------- run_prompt (R13) ----------
