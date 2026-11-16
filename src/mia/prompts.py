@@ -4,6 +4,8 @@ See docs/BACKEND_SCHEMA.md ("Prompt") and docs/TRD.md ("Prompts: biblioteca e ve
 """
 
 import re
+import string
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +44,12 @@ class PromptSpec(_PromptFile):
     """A validated prompt plus fields filled in by the loader (never by the YAML)."""
 
     path: Path  # source file, used in error messages
+    variables: frozenset[str]  # {name} placeholders in system + user
+
+
+class RenderedPrompt(BaseModel):
+    system: str
+    user: str
 
 
 def _describe(exc: ValidationError) -> str:
@@ -107,6 +115,28 @@ def _check_consistency(spec: _PromptFile, name: str, version: int, path: Path) -
         raise PromptError(f"{path}: changelog: required from version 2 on")
 
 
+def _template_variables(path: Path, field: str, template: str) -> set[str]:
+    """Placeholder names in a template. Only plain {name} is allowed; {{ }} is a literal brace.
+
+    Attribute access ({a.b}), indexing ({a[0]}), conversions ({a!r}) and format specs
+    ({a:>10}) are rejected so a template can never reach into the values.
+    """
+    if not template.strip():
+        raise PromptError(f"{path}: {field}: must not be empty")
+    try:
+        parsed = list(string.Formatter().parse(template))
+    except ValueError as exc:
+        raise PromptError(f"{path}: {field}: malformed template ({exc})") from exc
+    names: set[str] = set()
+    for _, name, spec, conversion in parsed:
+        if name is None:
+            continue
+        if not name.isidentifier() or spec or conversion:
+            raise PromptError(f"{path}: {field}: only plain {{name}} fields are allowed")
+        names.add(name)
+    return names
+
+
 def load_prompt(
     name: str,
     version: int,
@@ -121,4 +151,24 @@ def load_prompt(
     except ValidationError as exc:
         raise PromptError(f"{path}: {_describe(exc)}") from exc
     _check_consistency(spec, name, version, path)
-    return PromptSpec(**spec.model_dump(), path=path)
+    variables = _template_variables(path, "system", spec.system) | _template_variables(
+        path, "user", spec.user
+    )
+    return PromptSpec(**spec.model_dump(), path=path, variables=frozenset(variables))
+
+
+def render(prompt: PromptSpec, variables: Mapping[str, str]) -> RenderedPrompt:
+    """Fill system and user. Values are inserted as text, even if they contain braces."""
+    bad = sorted(k for k, v in variables.items() if not isinstance(v, str))
+    if bad:
+        raise PromptError(f"{prompt.path}: variables must be str: {', '.join(bad)}")
+    missing = sorted(prompt.variables - variables.keys())
+    extra = sorted(variables.keys() - prompt.variables)
+    if missing or extra:
+        parts = [f"missing: {', '.join(missing)}"] if missing else []
+        parts += [f"unexpected: {', '.join(extra)}"] if extra else []
+        raise PromptError(f"{prompt.path}: variables {'; '.join(parts)}")
+    values = dict(variables)
+    return RenderedPrompt(
+        system=prompt.system.format_map(values), user=prompt.user.format_map(values)
+    )

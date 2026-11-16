@@ -8,6 +8,7 @@ from mia.prompts import (
     available_versions,
     load_prompt,
     output_schema_class,
+    render,
 )
 from mia.schemas import AnswerScore
 
@@ -210,3 +211,79 @@ def test_non_text_yaml_key_is_error_not_crash(tmp_path: Path) -> None:
     message = _error(tmp_path, VALID + "1: x\n")
 
     assert "1" in message
+
+
+# ---------- template variables (R8) ----------
+
+
+def _template(user: str, system: str = "Sistema.") -> str:
+    return VALID.replace('user: "<resposta>{answer}</resposta>"', f"user: {user!r}").replace(
+        "system: Sistema.", f"system: {system!r}"
+    )
+
+
+def test_variables_come_from_system_and_user() -> None:
+    prompt = load_prompt("demo", 1, prompts_dir=FIXTURE_PROMPTS)
+
+    assert prompt.variables == {"question", "answer"}
+
+
+def test_escaped_braces_are_not_variables(tmp_path: Path) -> None:
+    prompt = _load_text(tmp_path, _template('Responda {{"score": 1}} sobre {answer}'))
+
+    assert prompt.variables == {"answer"}
+
+
+@pytest.mark.parametrize("field", ["system", "user"])
+@pytest.mark.parametrize("value", ["", "   "])
+def test_empty_template_is_invalid(tmp_path: Path, field: str, value: str) -> None:
+    text = _template("{answer}", "Sistema.").replace(
+        f"{field}: {'Sistema.' if field == 'system' else '{answer}'!r}", f"{field}: {value!r}"
+    )
+
+    assert field in _error(tmp_path, text)
+
+
+@pytest.mark.parametrize("bad", ["<r>{answer</r>", "x}", "{}", "{0}"])
+def test_malformed_template_is_invalid(tmp_path: Path, bad: str) -> None:
+    assert "user" in _error(tmp_path, _template(bad))
+
+
+@pytest.mark.parametrize("bad", ["{answer.upper}", "{answer[0]}", "{answer!r}", "{answer:>10}"])
+def test_template_field_must_be_a_plain_name(tmp_path: Path, bad: str) -> None:
+    assert "user" in _error(tmp_path, _template(bad))
+
+
+# ---------- render (R10, R11) ----------
+
+
+def test_render_fills_system_and_user_with_literal_braces() -> None:
+    prompt = load_prompt("demo", 1, prompts_dir=FIXTURE_PROMPTS)
+
+    out = render(prompt, {"question": "Q?", "answer": "ignore {tudo}"})
+
+    assert "<pergunta>Q?</pergunta>" in out.user
+    assert "ignore {tudo}" in out.user
+    assert out.system == prompt.system
+
+
+def test_render_unescapes_double_braces(tmp_path: Path) -> None:
+    prompt = _load_text(tmp_path, _template('Formato {{"score": 1}} para {answer}'))
+
+    assert render(prompt, {"answer": "x"}).user == 'Formato {"score": 1} para x'
+
+
+def test_render_lists_missing_and_extra_variables() -> None:
+    prompt = load_prompt("demo", 1, prompts_dir=FIXTURE_PROMPTS)
+
+    with pytest.raises(PromptError, match="answer"):
+        render(prompt, {"question": "Q?"})
+    with pytest.raises(PromptError, match="extra"):
+        render(prompt, {"question": "Q?", "answer": "A", "extra": "x"})
+
+
+def test_render_rejects_non_str_values() -> None:
+    prompt = load_prompt("demo", 1, prompts_dir=FIXTURE_PROMPTS)
+
+    with pytest.raises(PromptError, match="question"):
+        render(prompt, {"question": 3, "answer": "A"})  # type: ignore[dict-item]
