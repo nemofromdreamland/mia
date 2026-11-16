@@ -57,3 +57,29 @@ def test_generated_by_groq(items: list[GoldenItem]) -> None:
 
 def test_no_personal_data(items: list[GoldenItem]) -> None:
     assert all(mask_text(i.answer_text) == i.answer_text for i in items)
+
+
+def test_every_item_has_human_score_1_to_5(items: list[GoldenItem]) -> None:
+    assert all(i.human_score is not None and 1 <= i.human_score <= 5 for i in items)
+
+
+def test_every_item_has_a_split(items: list[GoldenItem]) -> None:
+    assert all(i.split in {"dev", "test"} for i in items)
+
+
+def test_split_is_49_dev_and_21_test(items: list[GoldenItem]) -> None:
+    assert Counter(i.split for i in items) == {"dev": 49, "test": 21}
+
+
+def test_split_is_7_dev_3_test_per_variant(items: list[GoldenItem]) -> None:
+    counts = Counter((i.variant, i.split) for i in items)
+    for variant in EXPECTED_VARIANTS:
+        assert counts[(variant, "dev")] == 7
+        assert counts[(variant, "test")] == 3
+
+
+def test_paraphrase_shares_split_with_original(items: list[GoldenItem]) -> None:
+    split_by_id = {i.item_id: i.split for i in items}
+    for item in items:
+        if item.paraphrase_of is not None:
+            assert item.split == split_by_id[item.paraphrase_of]
