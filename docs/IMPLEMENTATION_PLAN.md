@@ -100,7 +100,7 @@ Objetivo: a baseline v1 nos modelos do Bedrock salva antes de segunda 14h; itera
 | 2.5 | Promptfoo com custom provider em Python chamando `src/mia` e assertions em Python | Agente | `evals/promptfooconfig.yaml`, `evals/assertions/` | `npx promptfoo eval` roda o conjunto A em um modelo |
 | 2.6 | Métricas agregadas: kappa ponderado, erro médio, % ±1, viés de verbosidade, consistência, JSON válido, custo, p95 | Agente | `evals/metrics.py` | Gera `results/<experimento>.md` com as tabelas |
 | 2.7 | Baseline v1 no Bedrock: Claude Haiku, Claude Sonnet ou Nova Pro, Mistral Large 3; conjuntos A e B | Agente | `runs/`, `results/baseline_v1.md` | Commitado antes de seg 14h |
-| 2.8 | Conjunto D com e sem Bedrock Guardrails (guardrail criado via boto3 ou console) | Agente | `results/robustez_v1.md` | Taxa de ataques que funcionaram nos dois cenários |
+| 2.8 | Conjunto D com e sem Bedrock Guardrails, dividida em 2.8a (defesas: prompt attack, poisoning, fora do assunto, PII; guardrail via boto3) e 2.8b (rodada e relatório) | Agente | `config/guardrails.yaml`, `results/robustez_v1.md` | Taxa de ataques que funcionaram nos dois cenários |
 | 2.9 | Prompt v2 do juiz ajustado só no split dev; resultado reportado no teste | Você + agente | `prompts/judge/v2.yaml`, `results/judge_v1_vs_v2.md` | Tabela v1 × v2 incluindo o que piorou |
 | 2.10 | Conjunto A em modo rápido no CI, com respostas gravadas (sem chamar modelo) | Agente | `tests/test_eval_regression.py` | Roda em menos de 1 min no GitHub Actions |
 

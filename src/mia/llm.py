@@ -55,6 +55,18 @@ LANGCHAIN_PROVIDERS: dict[Provider, str] = {
 }
 
 
+class GuardrailBlocked(Exception):
+    """A Bedrock Guardrail intervened (prompt attack, denied topic or PII block)."""
+
+
+# Tags of the prompts that wrap text coming from outside (candidate, CV, job, transcript).
+EXTERNAL_TAGS = ("resposta", "cv", "vaga", "transcricao")
+_EXTERNAL_BLOCK = re.compile(
+    rf"(<(?P<tag>{'|'.join(EXTERNAL_TAGS)})>)(.*?)(</(?P=tag)>)", re.DOTALL
+)
+GUARDRAIL_INTERVENED = "guardrail_intervened"
+
+
 class LLMInvalidOutputError(Exception):
     """Model output failed the schema even after one repair attempt."""
 
@@ -165,6 +177,7 @@ def resolve_model(ref: str | None, config: ModelsConfig) -> ModelSpec:
 def build_chat_model(spec: ModelSpec, params: dict[str, Any]) -> BaseChatModel:
     """The single place that instantiates a provider model."""
     model_params = dict(params)
+    model_params.update(guardrail_kwargs(spec, model_params.pop("guardrail", None)))
     if spec.provider == "gemini":
         model_params.setdefault("request_timeout", spec.request_timeout_seconds)
         # Retry once, in this module, under the catalog policy. The provider adapter's
@@ -173,6 +186,47 @@ def build_chat_model(spec: ModelSpec, params: dict[str, Any]) -> BaseChatModel:
     return init_chat_model(
         spec.model, model_provider=LANGCHAIN_PROVIDERS[spec.provider], **model_params
     )
+
+
+def guardrail_kwargs(spec: ModelSpec, guardrail: dict[str, str] | None) -> dict[str, Any]:
+    """Model arguments that attach a Bedrock Guardrail; empty when there is none."""
+    if guardrail is None:
+        return {}
+    if spec.provider != "bedrock":
+        raise ModelConfigError(f"guardrails only work on bedrock, not {spec.provider!r}")
+    config = {
+        "guardrailIdentifier": guardrail["id"],
+        "guardrailVersion": guardrail["version"],
+        "trace": "enabled",
+    }
+    return {"guardrail_config": config}
+
+
+def guard_user_content(user: str, guardrail: dict[str, str] | None) -> str | list[dict[str, Any]]:
+    """Split the user message so only outside text (answer, CV, job) is guard content.
+
+    The guardrail then checks just those blocks (never our own instructions), which is what
+    applies prompt-attack detection to documents too (poisoning defence).
+    """
+    if guardrail is None:
+        return user
+    blocks: list[dict[str, Any]] = []
+    position = 0
+    for match in _EXTERNAL_BLOCK.finditer(user):
+        before = user[position : match.start(3)]
+        if before:
+            blocks.append({"type": "text", "text": before})
+        if match.group(3):
+            blocks.append({"type": "guard_content", "text": match.group(3)})
+        position = match.end(3)
+    rest = user[position:]
+    if rest or not blocks:
+        blocks.append({"type": "text", "text": rest})
+    return blocks
+
+
+def guardrail_intervened(response: AIMessage) -> bool:
+    return response.response_metadata.get("stopReason") == GUARDRAIL_INTERVENED
 
 
 def estimate_cost(spec: ModelSpec, input_tokens: int, output_tokens: int) -> float:
@@ -304,7 +358,20 @@ def _call(
         )
         append_run_record(failed, runs_dir, on_record)
         raise
-    return response, _elapsed_ms(started)
+    latency_ms = _elapsed_ms(started)
+    if guardrail_intervened(response):
+        blocked = RunRecord(
+            **record,
+            output_raw=response.text,
+            input_tokens=0,
+            output_tokens=0,
+            latency_ms=latency_ms,
+            cost_usd=0.0,
+            error=f"{GUARDRAIL_INTERVENED}: {response.text}",
+        )
+        append_run_record(blocked, runs_dir, on_record)
+        raise GuardrailBlocked(response.text)
+    return response, latency_ms
 
 
 def _write_success(
@@ -372,7 +439,8 @@ def invoke(
         experiment=experiment,
         session_id=session_id,
     )
-    messages = [SystemMessage(system), HumanMessage(user)]
+    guarded = guard_user_content(user, params.get("guardrail"))
+    messages = [SystemMessage(system), HumanMessage(guarded)]
     response, latency_ms = _call(runnable, messages, record, runs_dir, on_record)
     _write_success(
         spec=spec,
@@ -443,7 +511,8 @@ def invoke_structured[T: BaseModel](
         experiment=experiment,
         session_id=session_id,
     )
-    messages: list[BaseMessage] = [SystemMessage(system), HumanMessage(user)]
+    guarded = guard_user_content(user, params.get("guardrail"))
+    messages: list[BaseMessage] = [SystemMessage(system), HumanMessage(guarded)]
     response, latency_ms = _call(runnable, messages, record, runs_dir, on_record)
     responses = [response]
     first_try = True
