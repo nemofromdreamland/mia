@@ -6,20 +6,36 @@ from pathlib import Path
 
 import pytest
 
+from mia.interviewer import InterviewError
 from mia.llm import LLMInvalidOutputError
 from mia.prep_graph import PrepInput, PrepResult, PrepValidationError
+from mia.report_graph import ReportResult, ReportValidationError
 from mia.repositories import InMemorySessionRepository
-from mia.schemas import InterviewPlan, Phase, Screening, ToolDecision, Turn
+from mia.schemas import (
+    AnswerScore,
+    CandidateSummary,
+    InterviewPlan,
+    Phase,
+    Report,
+    Screening,
+    ToolDecision,
+    Turn,
+)
 from mia.simulation import (
     LOCAL_VISITOR,
     SimulationDeps,
     SimulationError,
     begin,
+    default_deps,
+    finish,
     new_session_id,
     prepare,
+    reply,
+    stop,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "prep"
+REPORT_FIXTURES = Path(__file__).parent / "fixtures" / "report"
 T0 = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
 ULID_RE = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 
@@ -33,7 +49,7 @@ def fake_writer(phase: Phase, question: str, instruction: str, history: list[Tur
 
 
 def fake_decider(question, answer, state, time_status) -> ToolDecision:
-    return ToolDecision(action="next", reason="ok")
+    return ToolDecision(action="next_question", reason="ok")
 
 
 def fake_scorer(question, answer):
@@ -155,3 +171,140 @@ def test_begin_starts_the_interview_and_saves_first_turn() -> None:
     assert state.session_id == session.session_id
     assert turn.turn_no == 1
     assert turn.interviewer_text.startswith("[")
+
+
+# ---------- step 3: reply, stop, finish, default_deps ----------
+
+
+def fixture_report(turns: list[Turn]) -> ReportResult:
+    score = AnswerScore(
+        score=4, criteria_met=[], evidence_quotes=[], justification="ok", quotes_verified=True
+    )
+    return ReportResult(
+        report=Report.model_validate_json(
+            (REPORT_FIXTURES / "report_ok.json").read_text(encoding="utf-8")
+        ),
+        summary=CandidateSummary.model_validate_json(
+            (REPORT_FIXTURES / "summary_ok.json").read_text(encoding="utf-8")
+        ),
+        turns=[t.model_copy(update={"score": score}) if t.answer_text else t for t in turns],
+    )
+
+
+def started(report=None):
+    deps = make_deps()
+    if report is not None:
+        deps = deps.model_copy(update={"report": report})
+    session, result = prepare(deps, prep_input())
+    state, _ = begin(deps, session, result.plan)
+    return deps, session, state
+
+
+def test_reply_saves_answered_turn_and_next_turn() -> None:
+    deps, session, state = started()
+
+    step = reply(deps, state, "Minha resposta, escreva para a@b.com")
+
+    turns = deps.repo.list_turns(LOCAL_VISITOR, session.session_id)
+    assert [t.turn_no for t in turns] == [1, 2]
+    assert turns[0].answer_text is not None
+    assert "a@b.com" not in turns[0].answer_text
+    assert turns[0] == step.answered
+    assert turns[1] == step.next_turn
+    stored = deps.repo.get_session(LOCAL_VISITOR, session.session_id)
+    assert stored.turn_count == 2
+    assert stored.current_question_id == step.next_turn.question_id
+    assert stored.follow_ups_used == step.state.follow_ups_used
+    assert stored.status == "in_progress"
+
+
+def test_reply_empty_answer_raises_and_saves_nothing() -> None:
+    deps, session, state = started()
+
+    with pytest.raises(InterviewError):
+        reply(deps, state, "   ")
+
+    assert len(deps.repo.list_turns(LOCAL_VISITOR, session.session_id)) == 1
+    assert deps.repo.get_session(LOCAL_VISITOR, session.session_id).turn_count == 1
+
+
+def test_reply_through_the_whole_plan_ends_with_closing_turn() -> None:
+    deps, session, state = started()
+
+    while not state.ended:
+        state = reply(deps, state, "resposta").state
+
+    assert state.end_reason == "plan_done"
+    turns = deps.repo.list_turns(LOCAL_VISITOR, session.session_id)
+    assert turns[-1].interviewer_text.startswith("[closing]")
+    assert len(turns) == state.turn_count
+
+
+def test_stop_saves_closing_turn_with_visitor_reason() -> None:
+    deps, session, state = started()
+    state = reply(deps, state, "resposta").state
+
+    ended, closing = stop(deps, state)
+
+    assert ended.ended
+    assert ended.end_reason == "visitor"
+    turns = deps.repo.list_turns(LOCAL_VISITOR, session.session_id)
+    assert turns[-1] == closing
+    assert closing.interviewer_text.startswith("[closing]")
+    stored = deps.repo.get_session(LOCAL_VISITOR, session.session_id)
+    assert stored.turn_count == ended.turn_count
+
+
+def test_finish_completes_the_session_with_the_report() -> None:
+    received: list[list[Turn]] = []
+
+    def report(plan, turns):
+        received.append(turns)
+        return fixture_report(turns)
+
+    deps, session, state = started(report)
+    state = reply(deps, state, "resposta").state
+    state, _ = stop(deps, state)
+    before = deps.repo.list_turns(LOCAL_VISITOR, session.session_id)
+
+    result = finish(deps, state)
+
+    stored = deps.repo.get_session(LOCAL_VISITOR, session.session_id)
+    assert stored.status == "completed"
+    assert stored.ended_at == T0
+    assert stored.overall_score == result.report.overall_score
+    assert stored.headline == result.summary.headline
+    assert stored.competency_scores == {c.competency: c.score for c in result.report.competencies}
+    assert received == [before]
+    saved = deps.repo.list_turns(LOCAL_VISITOR, session.session_id)
+    assert saved[0].score is not None  # the scored turn came back from the report
+
+
+@pytest.mark.parametrize(
+    "error",
+    [ReportValidationError(["x"]), LLMInvalidOutputError("bad json")],
+)
+def test_finish_failure_marks_session_failed(error: Exception) -> None:
+    def report(plan, turns):
+        raise error
+
+    deps, session, state = started(report)
+    state, _ = stop(deps, state)
+
+    with pytest.raises(SimulationError) as info:
+        finish(deps, state)
+
+    stored = deps.repo.get_session(LOCAL_VISITOR, session.session_id)
+    assert stored.status == "failed"
+    assert stored.error == str(info.value)
+
+
+def test_default_deps_wires_the_real_pieces_with_an_in_memory_repo() -> None:
+    deps = default_deps("technical")
+
+    assert isinstance(deps.repo, InMemorySessionRepository)
+    assert callable(deps.decider)
+    assert callable(deps.writer)
+    assert callable(deps.report)
+    repo = InMemorySessionRepository()
+    assert default_deps("hr", repo).repo is repo
