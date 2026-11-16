@@ -670,3 +670,166 @@ def test_cli_missing_export_d_fails_without_writing(tmp_path: Path) -> None:
     )  # fmt: skip
     assert code == 1
     assert not out.exists()
+
+
+# --- v1 x v2 comparison (task 2.9) ------------------------------------------
+
+COMPARE_FIXTURE = (
+    Path(__file__).resolve().parent / "fixtures" / "promptfoo_export_compare_small.json"
+)
+
+
+def _versioned_record(version: int, cost: float, latency: int) -> RunRecord:
+    return _record(valid=True, cost=cost, latency=latency).model_copy(
+        update={"prompt_version": version}
+    )
+
+
+def _pair(
+    item_id: str, human: int, v1: int | None, v2: int | None, *, split: str = "test"
+) -> list[object]:
+    return [
+        _item(item_id, v1, human, split=split, label="judge-v1"),
+        _item(item_id, v2, human, split=split, label="judge-v2"),
+    ]
+
+
+def _delta(deltas: list[object], split: str, metric: str) -> object:
+    return next(d for d in deltas if d.split == split and d.metric == metric)
+
+
+def test_load_export_reads_prompt_version_from_metadata() -> None:
+    items = m.load_promptfoo_export(COMPARE_FIXTURE)
+    versions = {i.label: i.prompt_version for i in items}
+    assert versions == {"judge-v1": 1, "judge-v2": 2}
+
+
+def test_compare_mae_improved() -> None:
+    items = _pair("a", 3, 4, 3) + _pair("b", 3, 2, 3)  # v1 MAE 1.0, v2 MAE 0.0
+    deltas = m.compare_versions(items, [], "judge-v1", "judge-v2")
+    mae = _delta(deltas, "test (oficial)", "MAE")
+    assert (mae.v1, mae.v2) == (1.0, 0.0)
+    assert mae.delta == pytest.approx(-1.0)
+    assert mae.verdict == "melhorou"
+
+
+def test_compare_kappa_worse() -> None:
+    items = [
+        *_pair("a", 1, 1, 1),
+        *_pair("b", 3, 3, 3),
+        *_pair("c", 5, 5, 1),
+    ]
+    kappa = _delta(m.compare_versions(items, [], "judge-v1", "judge-v2"), "todos", "Kappa")
+    assert kappa.delta is not None and kappa.delta < 0
+    assert kappa.verdict == "piorou"
+
+
+def test_compare_mean_error_uses_distance_from_zero() -> None:
+    items = _pair("a", 3, 5, 2)  # v1 error +2, v2 error -1: closer to zero is better
+    err = _delta(m.compare_versions(items, [], "judge-v1", "judge-v2"), "todos", "Erro médio")
+    assert err.delta == pytest.approx(-3.0)
+    assert err.verdict == "melhorou"
+
+
+def test_compare_equal_within_tolerance_and_nd() -> None:
+    assert m._verdict("MAE", 0.500, 0.502) == "igual"
+    assert m._verdict("MAE", 0.5, None) == "n/d"
+    assert m._verdict("MAE", None, 0.5) == "n/d"
+    assert m._verdict("% ±1", 90.0, 90.4) == "igual"  # 0.5 percentage points
+    assert m._verdict("% ±1", 90.0, 91.0) == "melhorou"
+
+
+def test_compare_cost_and_p95_come_from_runs_by_prompt_version() -> None:
+    items = m.load_promptfoo_export(COMPARE_FIXTURE)
+    records = [
+        _versioned_record(1, 0.002, 100),
+        _versioned_record(1, 0.002, 300),
+        _versioned_record(2, 0.001, 100),
+        _versioned_record(2, 0.001, 200),
+    ]
+    deltas = m.compare_versions(items, records, "judge-v1", "judge-v2")
+    cost = _delta(deltas, "todos", "Custo médio (US$)")
+    assert (cost.v1, cost.v2) == (0.002, 0.001)
+    assert cost.verdict == "melhorou"
+    p95 = _delta(deltas, "todos", "p95 (ms)")
+    assert (p95.v1, p95.v2, p95.verdict) == (300.0, 200.0, "melhorou")
+
+
+def test_compare_without_runs_has_nd_cost() -> None:
+    deltas = m.compare_versions(_pair("a", 3, 3, 3), [], "judge-v1", "judge-v2")
+    assert _delta(deltas, "todos", "Custo médio (US$)").verdict == "n/d"
+
+
+def test_compare_covers_every_split_and_metric() -> None:
+    deltas = m.compare_versions(_pair("a", 3, 3, 3), [], "judge-v1", "judge-v2")
+    assert {d.split for d in deltas} == {"dev", "test (oficial)", "todos"}
+    assert {d.metric for d in deltas if d.split == "dev"} >= {
+        "Kappa", "Erro médio", "MAE", "% ±1", "Viés de verbosidade", "Citações verificáveis",
+    }  # fmt: skip
+
+
+def test_item_regression_when_v2_is_farther_from_human() -> None:
+    items = _pair("t1", 2, 3, 4)
+    regs = m.item_regressions(items, "judge-v1", "judge-v2")
+    assert [(r.item_id, r.human_score, r.v1_score, r.v2_score) for r in regs] == [("t1", 2, 3, 4)]
+
+
+def test_item_regression_ignores_dev_and_improvements() -> None:
+    items = _pair("t1", 2, 4, 3) + _pair("d1", 2, 2, 5, split="dev")
+    assert m.item_regressions(items, "judge-v1", "judge-v2") == []
+
+
+def test_item_regression_counts_new_judge_error() -> None:
+    regs = m.item_regressions(_pair("t1", 3, 3, None), "judge-v1", "judge-v2")
+    assert len(regs) == 1 and regs[0].v2_score is None
+
+
+def test_render_compare_section_lists_regressions() -> None:
+    items = m.load_promptfoo_export(COMPARE_FIXTURE)
+    text = m.render_report("exp", items, [], [COMPARE_FIXTURE], compare=("judge-v1", "judge-v2"))
+    assert "## v1 × v2" in text
+    assert "O que piorou" in text
+    assert "| test (oficial) |" in text.split("## v1 × v2")[1]
+    assert "t1-level_2" in text.split("O que piorou")[1]  # human 2, v1 3, v2 4
+
+
+def test_render_compare_without_regressions_says_so() -> None:
+    items = _pair("a", 3, 3, 3)
+    text = m.render_report("exp", items, [], [], compare=("judge-v1", "judge-v2"))
+    section = text.split("O que piorou")[1]
+    assert "Nenhuma piora" in section
+
+
+def test_render_without_compare_has_no_comparison_section() -> None:
+    assert "v1 × v2" not in _report()
+
+
+def test_cli_compare_writes_section(tmp_path: Path) -> None:
+    code = m.main(
+        [
+            "--export", str(COMPARE_FIXTURE),
+            "--runs", str(_write_inputs(tmp_path)),
+            "--experiment", "exp",
+            "--compare", "judge-v1", "judge-v2",
+            "--out-dir", str(tmp_path),
+        ]
+    )  # fmt: skip
+    assert code == 0
+    assert "## v1 × v2" in (tmp_path / "exp.md").read_text(encoding="utf-8")
+
+
+def test_cli_compare_missing_label_fails_without_writing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = m.main(
+        [
+            "--export", str(COMPARE_FIXTURE),
+            "--runs", str(_write_inputs(tmp_path)),
+            "--experiment", "exp",
+            "--compare", "judge-v1", "judge-v9",
+            "--out-dir", str(tmp_path),
+        ]
+    )  # fmt: skip
+    assert code == 1
+    assert "judge-v9" in capsys.readouterr().err
+    assert not (tmp_path / "exp.md").exists()

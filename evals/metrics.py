@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import ValidationError
 
@@ -35,6 +35,7 @@ class JudgedItem:
     human_score: int | None
     judge_score: int | None  # None = provider error or output outside the schema
     quotes_ok: bool | None
+    prompt_version: int | None = None  # from provider metadata; links a label to its RunRecords
 
 
 @dataclass(frozen=True)
@@ -235,6 +236,7 @@ def _judged_item(result: dict[str, Any]) -> JudgedItem:
     if isinstance(item, str):
         item = json.loads(item)
     score, quotes_ok = _judge_score(result)
+    version = ((result.get("response") or {}).get("metadata") or {}).get("prompt_version")
     return JudgedItem(
         item_id=item["item_id"],
         label=(result.get("provider") or {}).get("label") or "default",
@@ -244,6 +246,7 @@ def _judged_item(result: dict[str, Any]) -> JudgedItem:
         human_score=item.get("human_score"),
         judge_score=score,
         quotes_ok=quotes_ok,
+        prompt_version=version if isinstance(version, int) else None,
     )
 
 
@@ -699,6 +702,183 @@ def _robustness_section(
     return section
 
 
+# --- v1 x v2 comparison (task 2.9) ------------------------------------------
+
+Verdict = Literal["melhorou", "piorou", "igual", "n/d"]
+# metric -> (good direction, tolerance below which the change counts as "igual").
+# "abs" = closer to zero is better. Percent metrics are in percentage points.
+METRIC_RULES: dict[str, tuple[Literal["up", "down", "abs"], float]] = {
+    "Kappa": ("up", 0.005),
+    "Erro médio": ("abs", 0.005),
+    "MAE": ("down", 0.005),
+    "% ±1": ("up", 0.5),
+    "Viés de verbosidade": ("abs", 0.005),
+    "Citações verificáveis": ("up", 0.5),
+    "Custo médio (US$)": ("down", 0.00001),
+    "p95 (ms)": ("down", 0.5),
+}
+RUN_METRICS = ("Custo médio (US$)", "p95 (ms)")
+
+
+@dataclass(frozen=True)
+class MetricDelta:
+    split: str
+    metric: str
+    v1: float | None
+    v2: float | None
+    delta: float | None
+    verdict: Verdict
+
+
+@dataclass(frozen=True)
+class ItemRegression:
+    item_id: str
+    human_score: int
+    v1_score: int | None
+    v2_score: int | None
+
+
+def _verdict(metric: str, v1: float | None, v2: float | None) -> Verdict:
+    if v1 is None or v2 is None:
+        return "n/d"
+    direction, tolerance = METRIC_RULES[metric]
+    change = abs(v2) - abs(v1) if direction == "abs" else v2 - v1
+    if abs(change) < tolerance:
+        return "igual"
+    better = change > 0 if direction == "up" else change < 0
+    return "melhorou" if better else "piorou"
+
+
+def _quotes_pct(items: Sequence[JudgedItem]) -> float | None:
+    checked = [i for i in items if i.judge_score is not None and i.quotes_ok is not None]
+    return _pct(sum(bool(i.quotes_ok) for i in checked), len(checked))
+
+
+def _quality_metrics(items: Sequence[JudgedItem]) -> dict[str, float | None]:
+    a = agreement(items)
+    return {
+        "Kappa": a.weighted_kappa,
+        "Erro médio": a.mean_error,
+        "MAE": a.mean_abs_error,
+        "% ±1": a.pct_within_one,
+        "Viés de verbosidade": verbosity_bias(items)[0],
+        "Citações verificáveis": _quotes_pct(items),
+    }
+
+
+def _run_metrics(
+    items: Sequence[JudgedItem], records: Sequence[RunRecord]
+) -> dict[str, float | None]:
+    """Cost and p95 of the judge calls whose prompt_version matches this label's items."""
+    versions = {i.prompt_version for i in items if i.prompt_version is not None}
+    mine = [r for r in records if r.prompt_name == "judge" and r.prompt_version in versions]
+    stats = run_stats(mine)
+    if len(stats) != 1:  # none, or several models under one label: not comparable
+        return {name: None for name in RUN_METRICS}
+    return {"Custo médio (US$)": stats[0].cost_mean, "p95 (ms)": stats[0].p95_ms}
+
+
+def _delta(split: str, metric: str, v1: float | None, v2: float | None) -> MetricDelta:
+    delta = None if v1 is None or v2 is None else v2 - v1
+    return MetricDelta(split, metric, v1, v2, delta, _verdict(metric, v1, v2))
+
+
+def compare_versions(
+    items: Sequence[JudgedItem],
+    records: Sequence[RunRecord],
+    base_label: str,
+    new_label: str,
+) -> list[MetricDelta]:
+    """Metric by metric and split, new minus base. Cost and p95 only for "todos"
+    (a RunRecord has no split)."""
+    base = [i for i in items if i.label == base_label]
+    new = [i for i in items if i.label == new_label]
+    deltas: list[MetricDelta] = []
+    for name, split in SPLITS:
+        v1 = _quality_metrics([i for i in base if split is None or i.split == split])
+        v2 = _quality_metrics([i for i in new if split is None or i.split == split])
+        if split is None:
+            v1 |= _run_metrics(base, records)
+            v2 |= _run_metrics(new, records)
+        deltas += [_delta(name, metric, v1[metric], v2[metric]) for metric in v1]
+    return deltas
+
+
+def item_regressions(
+    items: Sequence[JudgedItem], base_label: str, new_label: str, split: str = "test"
+) -> list[ItemRegression]:
+    """Items of the split where the new judge is farther from the human than the base."""
+    base = {i.item_id: i for i in items if i.label == base_label and i.split == split}
+    regressions: list[ItemRegression] = []
+    for item in items:
+        old = base.get(item.item_id)
+        if item.label != new_label or item.split != split or old is None:
+            continue
+        human = item.human_score
+        if human is None or old.judge_score is None:
+            continue
+        old_gap = abs(old.judge_score - human)
+        new_gap = None if item.judge_score is None else abs(item.judge_score - human)
+        if new_gap is None or new_gap > old_gap:
+            regressions.append(
+                ItemRegression(item.item_id, human, old.judge_score, item.judge_score)
+            )
+    return regressions
+
+
+def _fmt_metric(metric: str, value: float | None) -> str:
+    if metric in ("% ±1", "Citações verificáveis"):
+        return _fmt(value, 1, "%")
+    if metric == "Custo médio (US$)":
+        return _fmt(value, 5)
+    return _fmt(value, 0 if metric == "p95 (ms)" else 2)
+
+
+def _fmt_delta(metric: str, delta: float | None) -> str:
+    if delta is None:
+        return ND
+    digits = 5 if metric == "Custo médio (US$)" else 0 if metric == "p95 (ms)" else 2
+    return f"{delta:+.{digits}f}"
+
+
+def _compare_section(
+    items: Sequence[JudgedItem], records: Sequence[RunRecord], base: str, new: str
+) -> list[str]:
+    deltas = compare_versions(items, records, base, new)
+    rows = [
+        [
+            d.split,
+            d.metric,
+            _fmt_metric(d.metric, d.v1),
+            _fmt_metric(d.metric, d.v2),
+            _fmt_delta(d.metric, d.delta),
+            d.verdict,
+        ]
+        for d in deltas
+    ]
+    header = ["Split", "Métrica", base, new, f"Δ ({new} − {base})", "Veredito"]
+    lines = [f"## v1 × v2 ({base} → {new})", "", *_table(header, rows), ""]
+    lines += ["### O que piorou", ""]
+    worse = [d for d in deltas if d.verdict == "piorou"]
+    regressions = item_regressions(items, base, new)
+    if not worse and not regressions:
+        return [*lines, "Nenhuma piora.", ""]
+    if worse:
+        worse_rows = [
+            [d.split, d.metric, _fmt_metric(d.metric, d.v1), _fmt_metric(d.metric, d.v2)]
+            for d in worse
+        ]
+        lines += ["Métricas:", "", *_table(["Split", "Métrica", base, new], worse_rows), ""]
+    if regressions:
+        reg_rows = [
+            [r.item_id, str(r.human_score), _fmt(r.v1_score, 0), _fmt(r.v2_score, 0)]
+            for r in regressions
+        ]
+        lines += ["Itens do teste mais longe da nota humana:", ""]
+        lines += [*_table(["Item", "Humano", base, new], reg_rows), ""]
+    return lines
+
+
 def render_report(
     experiment: str,
     items: Sequence[JudgedItem],
@@ -706,6 +886,7 @@ def render_report(
     sources: Sequence[Path],
     tool_items: Sequence[ToolItem] = (),
     robustness_items: Sequence[RobustnessResult] = (),
+    compare: tuple[str, str] | None = None,
 ) -> str:
     """Markdown report: one row per model in each table. "n/d" where there is no data."""
     groups = _by_label(items)
@@ -723,6 +904,7 @@ def render_report(
         *_bias_section(groups),
         *_consistency_section(groups),
         *_quotes_section(groups),
+        *(_compare_section(items, records, *compare) if compare else []),
         *(_tool_section(tool_items) if tool_items else []),
         *(_robustness_section(robustness_items, records) if robustness_items else []),
         *_cost_section(records),
@@ -737,6 +919,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--export-d", type=Path, help="promptfoo --output JSON of set D")
     parser.add_argument("--runs", type=Path, nargs="+", required=True, help="runs/*.jsonl")
     parser.add_argument("--experiment", required=True)
+    parser.add_argument(
+        "--compare", nargs=2, metavar=("BASE", "NEW"), help="provider labels to compare (set A)"
+    )
     parser.add_argument("--out-dir", type=Path, default=Path("results"))
     parser.add_argument("--out", type=Path, help="report path (default: <out-dir>/<exp>.md)")
     args = parser.parse_args(argv)
@@ -750,9 +935,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    compare = (args.compare[0], args.compare[1]) if args.compare else None
+    if compare:
+        missing = [label for label in compare if label not in {i.label for i in items}]
+        if missing:
+            print(f"error: label(s) not in the export: {', '.join(missing)}", file=sys.stderr)
+            return 1
     exports = [p for p in (args.export, args.export_b, args.export_d) if p]
     report = render_report(
-        args.experiment, items, records, [*exports, *args.runs], tool_items, robustness
+        args.experiment, items, records, [*exports, *args.runs], tool_items, robustness, compare
     )
     out = args.out or args.out_dir / f"{args.experiment}.md"
     out.parent.mkdir(parents=True, exist_ok=True)

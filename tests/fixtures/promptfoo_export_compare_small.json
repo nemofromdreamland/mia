@@ -1,0 +1,414 @@
+{
+ "results": {
+  "results": [
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "judge-v1"
+    },
+    "response": {
+     "output": "{\"score\": 5, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "d1-level_3",
+      "prompt_version": 1
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "d1-level_3",
+       "variant": "level_3",
+       "split": "dev",
+       "human_score": 3,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "judge-v2"
+    },
+    "response": {
+     "output": "{\"score\": 3, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "d1-level_3",
+      "prompt_version": 2
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "d1-level_3",
+       "variant": "level_3",
+       "split": "dev",
+       "human_score": 3,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "judge-v1"
+    },
+    "response": {
+     "output": "{\"score\": 4, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": false}",
+     "metadata": {
+      "item_id": "d2-rambling",
+      "prompt_version": 1
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "d2-rambling",
+       "variant": "rambling",
+       "split": "dev",
+       "human_score": 2,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": false
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "judge-v2"
+    },
+    "response": {
+     "output": "{\"score\": 3, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "d2-rambling",
+      "prompt_version": 2
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "d2-rambling",
+       "variant": "rambling",
+       "split": "dev",
+       "human_score": 2,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "judge-v1"
+    },
+    "response": {
+     "output": "{\"score\": 3, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "t1-level_2",
+      "prompt_version": 1
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "t1-level_2",
+       "variant": "level_2",
+       "split": "test",
+       "human_score": 2,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "judge-v2"
+    },
+    "response": {
+     "output": "{\"score\": 4, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "t1-level_2",
+      "prompt_version": 2
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "t1-level_2",
+       "variant": "level_2",
+       "split": "test",
+       "human_score": 2,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "judge-v1"
+    },
+    "response": {
+     "output": "{\"score\": 2, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "t2-level_4",
+      "prompt_version": 1
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "t2-level_4",
+       "variant": "level_4",
+       "split": "test",
+       "human_score": 4,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "judge-v2"
+    },
+    "response": {
+     "output": "{\"score\": 4, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": false}",
+     "metadata": {
+      "item_id": "t2-level_4",
+      "prompt_version": 2
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "t2-level_4",
+       "variant": "level_4",
+       "split": "test",
+       "human_score": 4,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": false
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "judge-v1"
+    },
+    "response": {
+     "output": "{\"score\": 3, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "t3-rambling",
+      "prompt_version": 1
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "t3-rambling",
+       "variant": "rambling",
+       "split": "test",
+       "human_score": 1,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "judge-v2"
+    },
+    "response": {
+     "output": "{\"score\": 2, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "t3-rambling",
+      "prompt_version": 2
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "t3-rambling",
+       "variant": "rambling",
+       "split": "test",
+       "human_score": 1,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "judge-v1"
+    },
+    "response": {
+     "output": "{\"score\": 5, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "t4-level_5",
+      "prompt_version": 1
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "t4-level_5",
+       "variant": "level_5",
+       "split": "test",
+       "human_score": 5,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   },
+   {
+    "provider": {
+     "id": "file://providers/judge_provider.py",
+     "label": "judge-v2"
+    },
+    "response": {
+     "output": "{\"score\": 5, \"criteria_met\": [], \"evidence_quotes\": [], \"justification\": \"j\", \"quotes_verified\": true}",
+     "metadata": {
+      "item_id": "t4-level_5",
+      "prompt_version": 2
+     }
+    },
+    "testCase": {
+     "vars": {
+      "item": {
+       "item_id": "t4-level_5",
+       "variant": "level_5",
+       "split": "test",
+       "human_score": 5,
+       "paraphrase_of": null
+      }
+     }
+    },
+    "gradingResult": {
+     "componentResults": [
+      {
+       "assertion": {
+        "value": "file://assertions/judge_asserts.py:assert_quotes_verified"
+       },
+       "pass": true
+      }
+     ]
+    }
+   }
+  ]
+ }
+}
