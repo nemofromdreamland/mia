@@ -20,6 +20,7 @@ from mia.llm import (
     ModelsConfig,
     ModelSpec,
     invoke,
+    invoke_structured,
     load_models_config,
     resolve_model,
 )
@@ -223,6 +224,42 @@ def run_prompt(
     rendered = render(prompt, variables)
     spec = resolve_prompt_model(prompt, models, model)
     return invoke(
+        prompt_name=prompt.name,
+        prompt_version=prompt.version,
+        system=rendered.system,
+        user=rendered.user,
+        input=dict(variables),
+        model=spec.ref,
+        params=prompt.params,
+        experiment=experiment,
+        session_id=session_id,
+        config=models,
+        runs_dir=runs_dir,
+        chat_model=chat_model,
+    )
+
+
+def run_prompt_structured[T: BaseModel](
+    prompt: PromptSpec,
+    variables: Mapping[str, str],
+    output_schema: type[T],
+    *,
+    model: str | None = None,
+    experiment: str | None = None,
+    session_id: str | None = None,
+    models: ModelsConfig | None = None,
+    runs_dir: Path = DEFAULT_RUNS_DIR,
+    chat_model: BaseChatModel | None = None,
+) -> T:
+    """Like run_prompt, but the reply is validated against output_schema (one repair try).
+
+    variables must already be PII-masked. Raises LLMInvalidOutputError if the repair fails too.
+    """
+    models = models or load_models_config()
+    rendered = render(prompt, variables)
+    spec = resolve_prompt_model(prompt, models, model)
+    return invoke_structured(
+        output_schema=output_schema,
         prompt_name=prompt.name,
         prompt_version=prompt.version,
         system=rendered.system,

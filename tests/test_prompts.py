@@ -6,7 +6,7 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
 import mia.prompts as prompts_module
-from mia.llm import ModelConfigError, ModelsConfig, load_models_config
+from mia.llm import LLMInvalidOutputError, ModelConfigError, ModelsConfig, load_models_config
 from mia.prompts import (
     PromptError,
     PromptSpec,
@@ -16,6 +16,7 @@ from mia.prompts import (
     render,
     resolve_prompt_model,
     run_prompt,
+    run_prompt_structured,
 )
 from mia.schemas import AnswerScore
 
@@ -417,3 +418,57 @@ def test_run_prompt_sends_rendered_messages_and_honors_model_argument(
     assert seen == [[rendered.system, rendered.user]]
     (file,) = tmp_path.glob("*.jsonl")
     assert json.loads(file.read_text(encoding="utf-8"))["model"] == "openai/test-oss"
+
+
+# ---------- run_prompt_structured (1.6 R5, R7) ----------
+
+SCORE_JSON = json.dumps(
+    {"score": 4, "criteria_met": ["a"], "evidence_quotes": ["q"], "justification": "ok"}
+)
+
+
+def test_run_prompt_structured_returns_schema_instance_and_records_prompt(
+    tmp_path: Path, cfg: ModelsConfig
+) -> None:
+    prompt = load_prompt("demo", 1, prompts_dir=FIXTURE_PROMPTS)
+    variables = {"question": "Q?", "answer": "A"}
+    fake = GenericFakeChatModel(messages=iter([AIMessage(content=SCORE_JSON)]))
+
+    result = run_prompt_structured(
+        prompt,
+        variables,
+        AnswerScore,
+        experiment="t",
+        session_id="s1",
+        models=cfg,
+        runs_dir=tmp_path,
+        chat_model=fake,
+    )
+
+    assert isinstance(result, AnswerScore)
+    assert result.score == 4
+    (file,) = tmp_path.glob("*_t.jsonl")
+    (line,) = file.read_text(encoding="utf-8").splitlines()
+    record = json.loads(line)
+    assert record["prompt_name"] == "demo"
+    assert record["prompt_version"] == 1
+    assert record["session_id"] == "s1"
+    assert record["input"] == variables
+    assert record["output_parsed"]["score"] == 4
+
+
+def test_run_prompt_structured_invalid_output_raises_after_repair(
+    tmp_path: Path, cfg: ModelsConfig
+) -> None:
+    prompt = load_prompt("demo", 1, prompts_dir=FIXTURE_PROMPTS)
+    fake = GenericFakeChatModel(messages=iter([AIMessage(content="no"), AIMessage(content="no")]))
+
+    with pytest.raises(LLMInvalidOutputError):
+        run_prompt_structured(
+            prompt,
+            {"question": "Q?", "answer": "A"},
+            AnswerScore,
+            models=cfg,
+            runs_dir=tmp_path,
+            chat_model=fake,
+        )
