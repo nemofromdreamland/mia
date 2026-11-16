@@ -7,12 +7,21 @@ External decisions (LLM, judge, clock) are injected as callables.
 
 from collections.abc import Callable
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
 from mia.pii import mask_text
-from mia.schemas import AnswerScore, InterviewPlan, Phase, Question, ToolDecision, Turn
+from mia.prompts import load_prompt, run_prompt, run_prompt_structured
+from mia.schemas import (
+    AnswerScore,
+    InterviewPlan,
+    Persona,
+    Phase,
+    Question,
+    ToolDecision,
+    Turn,
+)
 
 EndReason = Literal["plan_done", "time_or_turns", "visitor"]
 
@@ -144,6 +153,60 @@ def _wants_follow_up(
 
 def _history(turns: list[Turn], limits: InterviewLimits) -> list[Turn]:
     return turns[-limits.history_turns :]
+
+
+def _history_text(turns: list[Turn]) -> str:
+    """Plain-text history (answers are already masked); empty when there is none."""
+    lines: list[str] = []
+    for turn in turns:
+        lines.append(f"Entrevistador: {turn.interviewer_text}")
+        if turn.answer_text:
+            lines.append(f"Candidato: {turn.answer_text}")
+    return "\n".join(lines)
+
+
+def should_follow_up(
+    question: Question,
+    answer: str,
+    state: InterviewState,
+    status: TimeStatus,
+    *,
+    limits: InterviewLimits = DEFAULT_LIMITS,
+    **llm_options: Any,
+) -> ToolDecision:
+    """Ask the fast LLM (prompt follow_up) whether to dig deeper; `answer` must be masked."""
+    variables = {
+        "question": question.text,
+        "look_for": "; ".join(question.look_for),
+        "follow_ups_left": str(max(0, limits.max_follow_ups - state.follow_ups_used)),
+        "minutes_left": f"{status.minutes_left:.1f}",
+        "history": _history_text(_history(state.turns, limits)),
+        "answer": answer,
+    }
+    return run_prompt_structured(
+        load_prompt("follow_up", 1),
+        variables,
+        ToolDecision,
+        session_id=state.session_id,
+        **llm_options,
+    )
+
+
+def default_writer(*, persona: Persona, **llm_options: Any) -> Writer:
+    """Writer backed by the interviewer prompt v1; the code supplies phase and question."""
+    prompt = load_prompt("interviewer", 1)
+
+    def write(phase: Phase, question: str, instruction: str, history: list[Turn]) -> str:
+        variables = {
+            "persona": persona,
+            "phase": phase,
+            "question": question,
+            "instruction": instruction,
+            "history": _history_text(history),
+        }
+        return run_prompt(prompt, variables, **llm_options).strip()
+
+    return write
 
 
 def score_answer(scorer: Scorer, question: Question, answer: str) -> AnswerScore | None:

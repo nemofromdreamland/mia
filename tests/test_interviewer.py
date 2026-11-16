@@ -5,6 +5,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+from langchain_core.messages import AIMessage
 from pydantic import ValidationError
 
 from mia.interviewer import (
@@ -14,9 +16,11 @@ from mia.interviewer import (
     StepResult,
     TimeStatus,
     answer,
+    default_writer,
     end_interview,
     next_question,
     score_answer,
+    should_follow_up,
     start,
     time_check,
 )
@@ -409,3 +413,72 @@ def test_time_over_still_scores_last_answer(plan: InterviewPlan) -> None:
         clock=clock_at(T0 + timedelta(minutes=20)),
     )
     assert result.answered.score == good_score()
+
+
+# --- real wiring: follow_up and interviewer prompts with a fake chat model ----
+
+
+def _fake(reply: str) -> GenericFakeChatModel:
+    return GenericFakeChatModel(messages=iter([AIMessage(content=reply)]))
+
+
+def _records(runs_dir: Path) -> list[dict]:
+    return [
+        json.loads(line)
+        for file in sorted(runs_dir.glob("*.jsonl"))
+        for line in file.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+
+
+def test_should_follow_up_returns_decision_and_logs_run(
+    plan: InterviewPlan, tmp_path: Path
+) -> None:
+    reply = json.dumps(
+        {"action": "follow_up", "follow_up_text": "E o resultado?", "reason": "faltou impacto"}
+    )
+    state = started(plan)
+    decision = should_follow_up(
+        plan.questions[0],
+        "Fiz um dashboard.",
+        state,
+        TimeStatus(over=False, minutes_left=9.5),
+        chat_model=_fake(reply),
+        runs_dir=tmp_path,
+    )
+    assert decision == ToolDecision(
+        action="follow_up", follow_up_text="E o resultado?", reason="faltou impacto"
+    )
+    records = _records(tmp_path)
+    assert len(records) == 1
+    assert records[0]["prompt_name"] == "follow_up"
+
+
+def test_should_follow_up_passes_remaining_follow_ups_and_history(
+    plan: InterviewPlan, tmp_path: Path
+) -> None:
+    reply = json.dumps({"action": "next_question", "reason": "ok"})
+    state = started(plan).model_copy(update={"follow_ups_used": 1})
+    should_follow_up(
+        plan.questions[0],
+        "Resposta.",
+        state,
+        TimeStatus(over=False, minutes_left=5),
+        chat_model=_fake(reply),
+        runs_dir=tmp_path,
+    )
+    sent = json.dumps(_records(tmp_path)[0]["input"], ensure_ascii=False)
+    assert plan.questions[0].look_for[0] in sent
+    assert state.turns[0].interviewer_text in sent
+    assert '"follow_ups_left": "1"' in sent
+
+
+def test_default_writer_returns_speech_and_logs_run(plan: InterviewPlan, tmp_path: Path) -> None:
+    writer = default_writer(
+        persona=plan.persona, chat_model=_fake("Olá! Conte sobre você."), runs_dir=tmp_path
+    )
+    speech = writer("opening", "Conte sobre você.", "Faça a pergunta.", [])
+    assert speech == "Olá! Conte sobre você."
+    records = _records(tmp_path)
+    assert len(records) == 1
+    assert records[0]["prompt_name"] == "interviewer"
