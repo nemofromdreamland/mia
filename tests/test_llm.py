@@ -171,7 +171,7 @@ def test_load_models_config_rejects_missing_file(tmp_path: Path) -> None:
 def test_real_models_config_loads_with_free_tier_on_gemini_and_groq() -> None:
     real = load_models_config()
 
-    assert real.default.startswith("gemini:")
+    assert real.default.startswith("bedrock:")
     free = {spec.provider for spec in real.models.values() if spec.free_tier}
     paid = {spec.provider for spec in real.models.values() if not spec.free_tier}
     assert free == {"gemini", "groq"}
@@ -594,12 +594,7 @@ def test_invoke_defaults_load_real_config_and_build_model_from_it(
     assert built == [
         (
             default.model,
-            {
-                "model_provider": "google_genai",
-                "temperature": 0,
-                "request_timeout": default.request_timeout_seconds,
-                "max_retries": 0,
-            },
+            {"model_provider": "bedrock_converse", "temperature": 0},
         )
     ]
     (record,) = _read_records(_today_file(tmp_path, "adhoc"))

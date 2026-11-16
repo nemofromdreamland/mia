@@ -363,8 +363,10 @@ def test_prompt_models_section_is_loaded_and_validated(tmp_path: Path) -> None:
         load_models_config(path)
 
 
-def test_real_models_config_still_loads() -> None:
-    assert load_models_config().prompt_models == {}
+def test_real_models_config_routes_every_prompt_to_its_default() -> None:
+    real = load_models_config()
+    assert real.prompt_models
+    assert set(real.prompt_models.values()) == {real.default}
 
 
 # ---------- run_prompt (R13) ----------

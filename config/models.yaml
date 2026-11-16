@@ -16,7 +16,9 @@
 #           Nova 2 Lite and Mistral Large 3
 # Model IDs confirmed with real calls in task 0.6 (runs/2026-11-15_smoke-providers.jsonl).
 
-default: "gemini:gemini-3.8-flash" # development model (Implementation Plan, Phase 1)
+# Gemini 3.8 Flash failed too often (503 high demand, truncated JSON, hangs), so development
+# moved to Claude Haiku on Bedrock (TRD: Haiku is the conversation model).
+default: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 models:
   # gemini-2.5-flash returns 404 for new users (task 0.6). Promotional paid rate through
@@ -47,3 +49,14 @@ models:
   "bedrock:mistral.mistral-large-3-675b-instruct":
     usd_per_mtok_input: 0.50
     usd_per_mtok_output: 1.50
+
+# Per-prompt override: the prompt YAMLs still say Gemini and are never edited (versioning rule).
+prompt_models:
+  candidate_summary: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+  follow_up: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+  interviewer: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+  judge: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+  planner: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+  report: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+  screening: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+  synthetic_candidate: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
