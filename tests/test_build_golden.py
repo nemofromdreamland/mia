@@ -26,7 +26,7 @@ def _load_script() -> ModuleType:
 bg = _load_script()
 
 CASE_ID = "prompt-engineer-jr"
-GENERATED_BY = "groq:openai/gpt-oss-120b|synthetic_candidate@v2"
+GENERATED_BY = "groq:openai/gpt-oss-120b|synthetic_candidate@v3"
 
 
 class SpyModel(GenericFakeChatModel):
@@ -123,7 +123,7 @@ def test_run_records_use_golden_experiment(env: Path, tmp_path: Path) -> None:
     records = [json.loads(line) for line in file.read_text(encoding="utf-8").splitlines()]
     assert len(records) == 14
     assert {r["experiment"] for r in records} == {"golden-2.2"}
-    assert {r["prompt_version"] for r in records} == {2}
+    assert {r["prompt_version"] for r in records} == {3}
 
 
 def test_blank_answer_fails_naming_the_item(env: Path, tmp_path: Path) -> None:
