@@ -10,7 +10,7 @@ from mia.repositories import (
     InMemoryReportStore,
     InMemorySessionRepository,
 )
-from mia.schemas import Session, ToolDecision, Turn
+from mia.schemas import AnswerScore, Session, ToolDecision, Turn
 from mia.service import (
     ServiceDeps,
     ServiceError,
@@ -19,6 +19,8 @@ from mia.service import (
     get_session,
     list_cases,
     list_sessions,
+    send_answer,
+    start_interview,
     to_public,
 )
 
@@ -46,7 +48,9 @@ class Gate:
             raise self.error
 
 
-def make_deps(gate_error: ServiceError | None = None, calls: Calls | None = None) -> ServiceDeps:
+def make_deps(
+    gate_error: ServiceError | None = None, calls: Calls | None = None, scorer=None
+) -> ServiceDeps:
     calls = calls or Calls()
     tick = {"now": T0}
 
@@ -72,7 +76,7 @@ def make_deps(gate_error: ServiceError | None = None, calls: Calls | None = None
         gate=Gate(calls, gate_error),
         decider=lambda q, a, s, t: ToolDecision(action="next_question", reason="ok"),
         writer_for=writer_for,
-        scorer=lambda q, a: pytest.fail("scorer not expected"),
+        scorer=scorer or (lambda q, a: pytest.fail("scorer not expected")),
         report=report,
         clock=clock,
         cases_dir=CASES_DIR,
@@ -245,3 +249,144 @@ def test_delete_session_removes_session_and_report() -> None:
         get_session(deps, VISITOR_A, session.session_id)
     assert exc.value.code == "not_found"
     assert isinstance(session, Session)
+
+
+# ---------- interview (step 3) ----------
+
+
+def fake_score(question, answer) -> AnswerScore:
+    return AnswerScore(score=4, criteria_met=[], evidence_quotes=[], justification="ok")
+
+
+def started(deps: ServiceDeps) -> Session:
+    session = create_session(deps, VISITOR_A, CASE_ID, "text")
+    start_interview(deps, VISITOR_A, session.session_id)
+    return session
+
+
+def test_start_interview_returns_first_public_turn_and_moves_to_in_progress() -> None:
+    deps = make_deps()
+    session = create_session(deps, VISITOR_A, CASE_ID, "text")
+
+    turn = start_interview(deps, VISITOR_A, session.session_id)
+
+    assert turn.turn_no == 1
+    saved = deps.repo.get_session(VISITOR_A, session.session_id)
+    assert saved.status == "in_progress"
+    assert saved.started_at is not None and saved.turn_count == 1
+    assert saved.current_question_id == turn.question_id
+    assert len(deps.repo.list_turns(VISITOR_A, session.session_id)) == 1
+    assert "decision" not in turn.model_dump()
+
+
+def test_start_interview_twice_is_invalid_state() -> None:
+    deps = make_deps()
+    session = started(deps)
+
+    with pytest.raises(ServiceError) as exc:
+        start_interview(deps, VISITOR_A, session.session_id)
+
+    assert exc.value.code == "invalid_state"
+
+
+def test_send_answer_outside_in_progress_is_invalid_state() -> None:
+    deps = make_deps()
+    session = create_session(deps, VISITOR_A, CASE_ID, "text")  # ready
+
+    with pytest.raises(ServiceError) as exc:
+        send_answer(deps, VISITOR_A, session.session_id, "oi")
+
+    assert exc.value.code == "invalid_state"
+
+
+@pytest.mark.parametrize("text", ["", "   ", "x" * 4001])
+def test_send_answer_invalid_input_saves_nothing(text) -> None:
+    deps = make_deps(scorer=fake_score)
+    session = started(deps)
+
+    with pytest.raises(ServiceError) as exc:
+        send_answer(deps, VISITOR_A, session.session_id, text)
+
+    assert exc.value.code == "invalid_input"
+    turns = deps.repo.list_turns(VISITOR_A, session.session_id)
+    assert len(turns) == 1 and turns[0].answer_text is None
+
+
+def test_send_answer_session_limit_by_turns_saves_nothing() -> None:
+    deps = make_deps(scorer=fake_score)
+    session = started(deps)
+    deps.repo.update_session(
+        VISITOR_A, session.session_id, expected_status="in_progress", changes={"turn_count": 30}
+    )
+
+    with pytest.raises(ServiceError) as exc:
+        send_answer(deps, VISITOR_A, session.session_id, "resposta")
+
+    assert exc.value.code == "session_limit"
+    assert deps.repo.list_turns(VISITOR_A, session.session_id)[0].answer_text is None
+
+
+def test_send_answer_session_limit_by_45_minutes_saves_nothing() -> None:
+    deps = make_deps(scorer=fake_score)
+    session = started(deps)
+    deps.repo.update_session(
+        VISITOR_A,
+        session.session_id,
+        expected_status="in_progress",
+        changes={"started_at": T0 - timedelta(hours=1)},
+    )
+
+    with pytest.raises(ServiceError) as exc:
+        send_answer(deps, VISITOR_A, session.session_id, "resposta")
+
+    assert exc.value.code == "session_limit"
+    assert deps.repo.list_turns(VISITOR_A, session.session_id)[0].answer_text is None
+
+
+def test_send_answer_continues_with_next_public_turn() -> None:
+    deps = make_deps(scorer=fake_score)
+    session = started(deps)
+
+    result = send_answer(deps, VISITOR_A, session.session_id, "Minha resposta")
+
+    assert result.ended is False
+    assert result.turn is not None and result.turn.turn_no == 2
+    dumped = result.model_dump_json()
+    for private in ("score", "decision", "is_follow_up"):
+        assert f'"{private}"' not in dumped
+    turns = deps.repo.list_turns(VISITOR_A, session.session_id)
+    assert [t.turn_no for t in turns] == [1, 2]
+    assert turns[0].answer_text == "Minha resposta" and turns[0].score is not None
+    saved = deps.repo.get_session(VISITOR_A, session.session_id)
+    assert saved.turn_count == 2 and saved.current_question_id == turns[1].question_id
+
+
+def test_send_answer_follow_up_keeps_question_and_counts_it() -> None:
+    deps = make_deps(scorer=fake_score)
+    deps = deps.model_copy(
+        update={
+            "decider": lambda q, a, s, t: ToolDecision(
+                action="follow_up", reason="x", follow_up_text="Pode detalhar?"
+            )
+        }
+    )
+    session = started(deps)
+
+    result = send_answer(deps, VISITOR_A, session.session_id, "curta")
+
+    turns = deps.repo.list_turns(VISITOR_A, session.session_id)
+    assert result.turn is not None and turns[1].question_id == turns[0].question_id
+    assert deps.repo.get_session(VISITOR_A, session.session_id).follow_ups_used == 1
+
+
+def test_start_and_send_other_visitor_is_not_found() -> None:
+    deps = make_deps(scorer=fake_score)
+    session = create_session(deps, VISITOR_A, CASE_ID, "text")
+
+    for call in (
+        lambda: start_interview(deps, VISITOR_B, session.session_id),
+        lambda: send_answer(deps, VISITOR_B, session.session_id, "oi"),
+    ):
+        with pytest.raises(ServiceError) as exc:
+            call()
+        assert exc.value.code == "not_found"

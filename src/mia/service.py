@@ -6,32 +6,48 @@ receives every dependency (repositories, models, clock) through `ServiceDeps`.
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import timedelta
 from pathlib import Path
-from typing import Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict
 
 from mia.cases import CaseError, CaseNotFoundError, load_case
 from mia.cases import list_cases as load_cases
-from mia.interviewer import Clock, Decider, Scorer, Writer
+from mia.interviewer import (
+    DEFAULT_LIMITS,
+    Clock,
+    Decider,
+    InterviewError,
+    InterviewState,
+    Scorer,
+    Writer,
+    answer,
+    start,
+)
 from mia.report_graph import ReportResult
 from mia.repositories import (
     CandidateCounter,
     ReportStore,
+    SessionConflictError,
     SessionNotFoundError,
     SessionRepository,
 )
 from mia.schemas import (
+    AnswerResult,
     CaseSummary,
     InterviewPlan,
     Mode,
     Persona,
     PublicTurn,
     Session,
+    SessionStatus,
     SessionView,
     Turn,
 )
 from mia.simulation import new_session_id
+
+SESSION_MAX_MINUTES = 45  # session_limit; the interviewer's own closing (<= 15 min) is separate
 
 ErrorCode = Literal[
     "not_found",
@@ -167,3 +183,113 @@ def delete_session(deps: ServiceDeps, visitor_id: str, session_id: str) -> None:
     with _session_lookup():
         deps.repo.delete_session(visitor_id, session_id)
     deps.reports.delete(session_id)
+
+
+def rebuild_state(session: Session, plan: InterviewPlan, turns: list[Turn]) -> InterviewState:
+    """The service keeps no state: rebuild it from the session row, the turns and the plan."""
+    ids = [question.id for question in plan.questions]
+    if session.started_at is None or session.current_question_id not in ids:
+        raise ServiceError("internal", "Estado da entrevista inconsistente.")
+    return InterviewState(
+        session_id=session.session_id,
+        plan=plan,
+        current_index=ids.index(session.current_question_id),
+        follow_ups_used=session.follow_ups_used,
+        turn_count=session.turn_count,
+        started_at=session.started_at,
+        turns=turns,
+    )
+
+
+def _load_plan(deps: ServiceDeps, session: Session) -> InterviewPlan:
+    try:
+        return load_case(session.case_id or "", deps.cases_dir).plan
+    except CaseError as exc:
+        raise ServiceError("internal", "Caso indisponível.") from exc
+
+
+def _update(
+    deps: ServiceDeps, session: Session, expected: SessionStatus, changes: dict[str, Any]
+) -> None:
+    """Update with a status guard; a concurrent change means the status is no longer valid."""
+    try:
+        deps.repo.update_session(
+            session.visitor_id, session.session_id, expected_status=expected, changes=changes
+        )
+    except SessionConflictError as exc:
+        raise ServiceError("invalid_state", "A sessão mudou de estado.") from exc
+
+
+def start_interview(deps: ServiceDeps, visitor_id: str, session_id: str) -> PublicTurn:
+    with _session_lookup():
+        session = deps.repo.get_session(visitor_id, session_id)
+    if session.status != "ready":
+        raise ServiceError("invalid_state", "A entrevista só começa em uma sessão pronta.")
+    plan = _load_plan(deps, session)
+    state, turn = start(session_id, plan, writer=deps.writer_for(session.persona), clock=deps.clock)
+    deps.repo.put_turn(visitor_id, turn)
+    _update(
+        deps,
+        session,
+        "ready",
+        {
+            "status": "in_progress",
+            "started_at": state.started_at,
+            "current_question_id": turn.question_id,
+            "follow_ups_used": state.follow_ups_used,
+            "turn_count": state.turn_count,
+        },
+    )
+    return to_public(turn)
+
+
+def _check_answer_allowed(deps: ServiceDeps, session: Session, text: str) -> None:
+    """State, then input, then session limits; nothing is written on any refusal."""
+    if session.status != "in_progress":
+        raise ServiceError("invalid_state", "A entrevista não está em andamento.")
+    if not text.strip() or len(text) > DEFAULT_LIMITS.max_answer_chars:
+        raise ServiceError(
+            "invalid_input",
+            f"A resposta deve ter de 1 a {DEFAULT_LIMITS.max_answer_chars} caracteres.",
+        )
+    elapsed = deps.clock() - (session.started_at or deps.clock())
+    if session.turn_count >= DEFAULT_LIMITS.max_turns or elapsed >= timedelta(
+        minutes=SESSION_MAX_MINUTES
+    ):
+        raise ServiceError("session_limit", "A entrevista atingiu o limite da sessão.")
+
+
+def send_answer(
+    deps: ServiceDeps, visitor_id: str, session_id: str, answer_text: str
+) -> AnswerResult:
+    with _session_lookup():
+        session = deps.repo.get_session(visitor_id, session_id)
+    _check_answer_allowed(deps, session, answer_text)
+    plan = _load_plan(deps, session)
+    state = rebuild_state(session, plan, deps.repo.list_turns(visitor_id, session_id))
+    try:
+        step = answer(
+            state,
+            answer_text,
+            decider=deps.decider,
+            writer=deps.writer_for(session.persona),
+            scorer=deps.scorer,
+            clock=deps.clock,
+        )
+    except InterviewError as exc:
+        raise ServiceError("invalid_input", str(exc)) from exc
+    if step.state.ended:
+        raise NotImplementedError("interview end + report: step 4 of spec 3.1")
+    deps.repo.put_turn(visitor_id, step.answered)
+    deps.repo.put_turn(visitor_id, step.next_turn)
+    _update(
+        deps,
+        session,
+        "in_progress",
+        {
+            "current_question_id": step.next_turn.question_id,
+            "follow_ups_used": step.state.follow_ups_used,
+            "turn_count": step.state.turn_count,
+        },
+    )
+    return AnswerResult(turn=to_public(step.next_turn))
