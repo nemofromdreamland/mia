@@ -9,7 +9,7 @@ from types import ModuleType
 import pytest
 import yaml
 
-from mia.schemas import ToolMomentItem
+from mia.schemas import PlanCaseItem, ToolMomentItem
 
 ROOT = Path(__file__).parents[1]
 DATASETS = ROOT / "evals" / "datasets"
@@ -96,3 +96,49 @@ def test_tools_split_70_30_by_action(tools: list[ToolMomentItem]) -> None:
 def test_tools_no_real_personal_data(tools: list[ToolMomentItem]) -> None:
     for item in tools:
         _assert_no_foreign_email(item.answer + item.history + item.note)
+
+
+# ---------------------------------------------------------------- set C (plans)
+
+
+@pytest.fixture(scope="module")
+def plans() -> list[PlanCaseItem]:
+    return io.load_jsonl(DATASETS / "plans.jsonl", PlanCaseItem)
+
+
+def test_plans_five_cases_and_one_extra(plans: list[PlanCaseItem]) -> None:
+    assert len(plans) == 6
+    assert Counter(item.source for item in plans) == {"case": 5, "extra": 1}
+    case_ids = {p.name for p in (ROOT / "cases").iterdir() if p.is_dir()}
+    from_cases = {Path(i.cv_path).parent.name for i in plans if i.source == "case"}
+    assert from_cases == case_ids
+    assert len({i.item_id for i in plans}) == 6
+
+
+def test_plans_files_exist_and_match_case_yaml(plans: list[PlanCaseItem]) -> None:
+    for item in plans:
+        assert (ROOT / item.cv_path).is_file(), item.item_id
+        assert (ROOT / item.job_path).is_file(), item.item_id
+        if item.source == "case":
+            meta = yaml.safe_load((ROOT / item.job_path).with_name("case.yaml").read_text("utf-8"))
+            assert item.persona == meta["persona"] and item.language == meta["language"]
+        else:
+            assert item.cv_path.startswith("evals/datasets/plan_extra/")
+
+
+def test_plans_gap_keywords_appear_in_job(plans: list[PlanCaseItem]) -> None:
+    for item in plans:
+        job = (ROOT / item.job_path).read_text(encoding="utf-8").lower()
+        for keyword in item.expected.gap_keywords:
+            assert keyword.lower() in job, f"{item.item_id}: {keyword}"
+
+
+def test_plans_split_4_dev_2_test_with_extra_in_test(plans: list[PlanCaseItem]) -> None:
+    assert Counter(i.split for i in plans) == {"dev": 4, "test": 2}
+    assert next(i for i in plans if i.source == "extra").split == "test"
+
+
+def test_plans_no_real_personal_data(plans: list[PlanCaseItem]) -> None:
+    for item in plans:
+        for path in (item.cv_path, item.job_path):
+            _assert_no_foreign_email((ROOT / path).read_text(encoding="utf-8"))
