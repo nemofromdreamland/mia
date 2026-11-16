@@ -13,6 +13,7 @@ from typing import TextIO
 
 from pydantic import ValidationError
 
+from mia.cases import CASES_DIR, CaseError, LoadedCase, load_case
 from mia.interviewer import InterviewError
 from mia.llm import ModelConfigError
 from mia.prep_graph import PrepInput
@@ -24,10 +25,12 @@ from mia.simulation import (
     finish,
     prepare,
     reply,
+    start_from_case,
     stop,
 )
 
 STOP_COMMAND = "/fim"
+DEFAULT_LEVEL, DEFAULT_MINUTES, DEFAULT_LANGUAGE = "junior", 20, "pt-BR"
 MIN_MINUTES, MAX_MINUTES = 5, 45
 
 
@@ -44,14 +47,36 @@ def _minutes(value: str) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mia", description="MIA — Mock Interview Assistant")
     commands = parser.add_subparsers(dest="command", required=True)
-    sim = commands.add_parser("simulate", help="simulate an interview from a CV and a job")
-    sim.add_argument("--cv", type=Path, required=True, help="CV file (.pdf, .md or .txt)")
-    sim.add_argument("--job", type=Path, required=True, help="job description text file")
-    sim.add_argument("--persona", choices=["hr", "technical", "manager"], required=True)
-    sim.add_argument("--level", choices=["internship", "junior", "mid"], default="junior")
-    sim.add_argument("--minutes", type=_minutes, default=20, help="5 to 45 (default 20)")
-    sim.add_argument("--language", choices=["pt-BR", "en-US"], default="pt-BR")
+    sim = commands.add_parser(
+        "simulate", help="simulate an interview (ready-made case or CV + job)"
+    )
+    mode = sim.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--case", help="id of a ready-made case in cases/")
+    mode.add_argument("--cv", type=Path, help="CV file (.pdf, .md or .txt)")
+    sim.add_argument("--job", type=Path, help="job description text file (with --cv)")
+    sim.add_argument("--persona", choices=["hr", "technical", "manager"])
+    sim.add_argument("--level", choices=["internship", "junior", "mid"])
+    sim.add_argument("--minutes", type=_minutes, help="5 to 45 (default 20)")
+    sim.add_argument("--language", choices=["pt-BR", "en-US"])
     return parser
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse and check the two modes (case × standalone); a bad mix exits with code 2."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    given = {"--persona": args.persona, "--level": args.level, "--language": args.language}
+    if args.case:
+        extras = [
+            flag
+            for flag, value in {**given, "--job": args.job, "--minutes": args.minutes}.items()
+            if value is not None
+        ]
+        if extras:
+            parser.error(f"--case already defines the interview; remove {', '.join(extras)}")
+    elif args.job is None or args.persona is None:
+        parser.error("--cv requires --job and --persona")
+    return args
 
 
 def _read_job(path: Path) -> str:
@@ -86,25 +111,34 @@ def _interview(deps: SimulationDeps, state, first_text: str, stdin: TextIO, stde
     return state
 
 
+def _prepare_standalone(args: argparse.Namespace, deps: SimulationDeps, stderr: TextIO):
+    data = PrepInput(
+        cv_path=args.cv,
+        job_text=_read_job(args.job),
+        persona=args.persona,
+        level=args.level or DEFAULT_LEVEL,
+        estimated_minutes=args.minutes or DEFAULT_MINUTES,
+        language=args.language or DEFAULT_LANGUAGE,
+    )
+    _say(stderr, "Preparando a entrevista...")
+    session, prepared = prepare(deps, data)
+    return session, prepared.plan
+
+
 def run_simulate(
     args: argparse.Namespace,
     deps: SimulationDeps,
     stdin: TextIO = sys.stdin,
     stdout: TextIO = sys.stdout,
     stderr: TextIO = sys.stderr,
+    loaded: LoadedCase | None = None,
 ) -> int:
     try:
-        data = PrepInput(
-            cv_path=args.cv,
-            job_text=_read_job(args.job),
-            persona=args.persona,
-            level=args.level,
-            estimated_minutes=args.minutes,
-            language=args.language,
-        )
-        _say(stderr, "Preparando a entrevista...")
-        session, prepared = prepare(deps, data)
-        state, first = begin(deps, session, prepared.plan)
+        if loaded is not None:
+            session, plan = start_from_case(deps, loaded), loaded.plan
+        else:
+            session, plan = _prepare_standalone(args, deps, stderr)
+        state, first = begin(deps, session, plan)
         state = _interview(deps, state, first.interviewer_text, stdin, stderr)
         _say(stderr, "\nGerando o relatório...")
         result = finish(deps, state)
@@ -120,15 +154,18 @@ def run_simulate(
     return 0
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+def main(argv: Sequence[str] | None = None, cases_dir: Path = CASES_DIR) -> int:
+    args = parse_args(argv)
     for stream in (sys.stdout, sys.stderr):  # Windows pipes default to cp1252
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
     try:
-        _read_job(args.job)  # fail fast, before any model is configured
-        return run_simulate(args, default_deps(args.persona))
-    except SimulationError as exc:
+        loaded = load_case(args.case, cases_dir) if args.case else None
+        if loaded is None:
+            _read_job(args.job)  # fail fast, before any model is configured
+        persona = loaded.case.persona if loaded else args.persona
+        return run_simulate(args, default_deps(persona), loaded=loaded)
+    except (SimulationError, CaseError) as exc:
         _say(sys.stderr, str(exc))
         return 1
     except (ModelConfigError, ValidationError) as exc:

@@ -11,6 +11,7 @@ from typing import Final
 
 from pydantic import BaseModel, ConfigDict
 
+from mia.cases import LoadedCase
 from mia.interviewer import (
     Clock,
     Decider,
@@ -92,6 +93,28 @@ def prepare(deps: SimulationDeps, data: PrepInput) -> tuple[Session, PrepResult]
         changes={"status": "ready", "fit_score": result.screening.fit_score},
     )
     return ready, result
+
+
+def start_from_case(deps: SimulationDeps, loaded: LoadedCase) -> Session:
+    """Create the session already `ready`: the case fixtures replace the prep (no model call)."""
+    now = deps.clock()
+    case = loaded.case
+    session = Session(
+        visitor_id=LOCAL_VISITOR,
+        session_id=new_session_id(deps.clock),
+        case_id=case.case_id,
+        case_version=case.version,
+        status="ready",
+        persona=case.persona,
+        language=case.language,
+        mode="text",
+        job_title=case.title,
+        fit_score=loaded.screening.fit_score,
+        created_at=now,
+        updated_at=now,
+    )
+    deps.repo.create_session(session)
+    return session
 
 
 def begin(

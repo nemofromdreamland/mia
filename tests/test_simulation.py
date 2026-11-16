@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from mia.cases import LoadedCase
 from mia.interviewer import InterviewError
 from mia.llm import LLMInvalidOutputError
 from mia.prep_graph import PrepInput, PrepResult, PrepValidationError
@@ -14,6 +15,7 @@ from mia.repositories import InMemorySessionRepository
 from mia.schemas import (
     AnswerScore,
     CandidateSummary,
+    Case,
     InterviewPlan,
     Phase,
     Report,
@@ -31,6 +33,7 @@ from mia.simulation import (
     new_session_id,
     prepare,
     reply,
+    start_from_case,
     stop,
 )
 
@@ -308,3 +311,53 @@ def test_default_deps_wires_the_real_pieces_with_an_in_memory_repo() -> None:
     assert callable(deps.report)
     repo = InMemorySessionRepository()
     assert default_deps("hr", repo).repo is repo
+
+
+# ---------- 1.12 step 3: start_from_case ----------
+
+
+def loaded_case() -> LoadedCase:
+    result = fixture_result()
+    case = Case(
+        case_id="prompt-engineer-jr",
+        title="Engenheiro(a) de Prompt Jr",
+        company="Nexa Consultoria",
+        level="junior",
+        persona="technical",
+        language="pt-BR",
+        blurb="Vaga fictícia.",
+        candidate_blurb="Você é Ana.",
+        estimated_minutes=10,
+        version=3,
+    )
+    return LoadedCase(case=case, screening=result.screening, plan=result.plan)
+
+
+def test_start_from_case_creates_a_ready_session_without_calling_prep() -> None:
+    deps = make_deps(prep=lambda data: pytest.fail("prep must not run"))
+    loaded = loaded_case()
+
+    session = start_from_case(deps, loaded)
+
+    stored = deps.repo.get_session(LOCAL_VISITOR, session.session_id)
+    assert stored == session
+    assert session.status == "ready"
+    assert session.case_id == "prompt-engineer-jr"
+    assert session.case_version == 3
+    assert session.persona == "technical"
+    assert session.language == "pt-BR"
+    assert session.job_title == "Engenheiro(a) de Prompt Jr"
+    assert session.fit_score == loaded.screening.fit_score
+    assert ULID_RE.match(session.session_id)
+
+
+def test_start_from_case_session_can_begin_the_interview() -> None:
+    deps = make_deps()
+    loaded = loaded_case()
+    session = start_from_case(deps, loaded)
+
+    state, _ = begin(deps, session, loaded.plan)
+
+    stored = deps.repo.get_session(LOCAL_VISITOR, session.session_id)
+    assert stored.status == "in_progress"
+    assert state.session_id == session.session_id

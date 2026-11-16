@@ -6,8 +6,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+import yaml
 
-from mia.cli import build_parser, main, run_simulate
+from mia.cases import load_case
+from mia.cli import build_parser, main, parse_args, run_simulate
 from mia.prep_graph import PrepResult, PrepValidationError
 from mia.report_graph import ReportResult
 from mia.repositories import InMemorySessionRepository
@@ -176,3 +178,93 @@ def test_prep_failure_exits_with_1(job_file: Path) -> None:
     assert code == 1
     assert out == ""
     assert err.strip()
+
+
+# ---------- 1.12 step 3: --case mode ----------
+
+CASE_ID = "prompt-engineer-jr"
+
+
+@pytest.fixture
+def cases_dir(tmp_path: Path) -> Path:
+    folder = tmp_path / "cases" / CASE_ID
+    folder.mkdir(parents=True)
+    meta = {
+        "case_id": CASE_ID,
+        "title": "Engenheiro(a) de Prompt Jr",
+        "company": "Nexa Consultoria",
+        "level": "junior",
+        "persona": "technical",
+        "language": "pt-BR",
+        "blurb": "Vaga fictícia.",
+        "candidate_blurb": "Você é Ana.",
+        "estimated_minutes": 10,
+        "version": 1,
+    }
+    (folder / "case.yaml").write_text(yaml.safe_dump(meta), encoding="utf-8")
+    for name in ("screening.json", "plan.json"):
+        source = PREP / name.replace(".json", "_ok.json")
+        (folder / name).write_text(source.read_text("utf-8"), encoding="utf-8")
+    return tmp_path / "cases"
+
+
+def test_case_mode_runs_the_interview_without_prep(cases_dir: Path) -> None:
+    args = build_parser().parse_args(["simulate", "--case", CASE_ID])
+    deps = make_deps(prep=lambda data: pytest.fail("prep must not run"))
+    out, err = io.StringIO(), io.StringIO()
+
+    code = run_simulate(
+        args, deps, io.StringIO("resp1\n/fim\n"), out, err, loaded=load_case(CASE_ID, cases_dir)
+    )
+
+    assert code == 0
+    data = json.loads(out.getvalue())
+    assert set(data) == {"session_id", "report", "summary"}
+    assert "[opening]" in err.getvalue()
+
+
+def test_case_conflicting_with_cv_exits_with_2() -> None:
+    with pytest.raises(SystemExit) as exc:
+        parse_args(["simulate", "--case", "x", "--cv", "a.md", "--job", "b.md"])
+    assert exc.value.code == 2
+
+
+def test_no_mode_exits_with_2() -> None:
+    with pytest.raises(SystemExit) as exc:
+        parse_args(["simulate"])
+    assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("extra", [["--persona", "hr"], ["--language", "en-US"]])
+def test_case_with_persona_or_language_exits_with_2(extra: list[str]) -> None:
+    with pytest.raises(SystemExit) as exc:
+        parse_args(["simulate", "--case", "x", *extra])
+    assert exc.value.code == 2
+
+
+def test_standalone_without_persona_exits_with_2() -> None:
+    with pytest.raises(SystemExit) as exc:
+        parse_args(["simulate", "--cv", "a.md", "--job", "b.md"])
+    assert exc.value.code == 2
+
+
+def test_cv_without_job_exits_with_2() -> None:
+    with pytest.raises(SystemExit) as exc:
+        parse_args(["simulate", "--cv", "a.md", "--persona", "hr"])
+    assert exc.value.code == 2
+
+
+def test_missing_case_exits_with_1_before_models(tmp_path: Path, capsys) -> None:
+    code = main(["simulate", "--case", "nao-existe"], cases_dir=tmp_path)
+
+    assert code == 1
+    assert "nao-existe" in capsys.readouterr().err
+
+
+def test_incomplete_case_exits_with_1(cases_dir: Path, capsys) -> None:
+    (cases_dir / CASE_ID / "plan.json").unlink()
+
+    code = main(["simulate", "--case", CASE_ID], cases_dir=cases_dir)
+
+    assert code == 1
+    assert "plan.json" in capsys.readouterr().err
