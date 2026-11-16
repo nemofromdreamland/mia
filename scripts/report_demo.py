@@ -1,7 +1,7 @@
 """Task 1.9: run the real report graph on fictional turns.
 
 Usage:
-    uv run python scripts/report_demo.py
+    uv run --env-file .env python scripts/report_demo.py
 
 Uses the test fixtures (fictional plan and turns) with the scores removed, so the
 real judge scores every answered turn. Spends about 6 model calls. Exit codes:
@@ -17,7 +17,7 @@ from pydantic import ValidationError
 from mia.judge import default_scorer
 from mia.llm import LLMInvalidOutputError, ModelConfigError
 from mia.report_graph import ReportError, ReportResult, run_report
-from mia.schemas import InterviewPlan, Turn
+from mia.schemas import AnswerScore, InterviewPlan, Question, Turn
 
 FIXTURES = Path(__file__).resolve().parent.parent / "tests" / "fixtures"
 SESSION_ID = "report-demo"
@@ -52,11 +52,24 @@ def print_result(result: ReportResult) -> None:
 
 def main() -> int:
     plan, turns = load_inputs()
+    scorer = default_scorer(session_id=SESSION_ID)
+    scorer_failures: list[Exception] = []
+
+    def remembering_scorer(question: Question, answer: str) -> AnswerScore:
+        if scorer_failures:
+            raise scorer_failures[0]
+        try:
+            return scorer(question, answer)
+        except Exception as exc:
+            if not scorer_failures:
+                scorer_failures.append(exc)
+            raise
+
     try:
         result = run_report(
             plan,
             turns,
-            scorer=default_scorer(session_id=SESSION_ID),
+            scorer=remembering_scorer,
             session_id=SESSION_ID,
         )
     except ValidationError:
@@ -66,6 +79,9 @@ def main() -> int:
         print(f"Falha na chamada ao modelo: {exc}", file=sys.stderr)
         return 2
     except ReportError as exc:
+        if scorer_failures:
+            print(f"Falha na chamada ao modelo: {scorer_failures[0]}", file=sys.stderr)
+            return 2
         print(f"FALHOU: regra do relatório não passou: {exc}", file=sys.stderr)
         return 1
     print_result(result)
