@@ -13,6 +13,7 @@ from typing import Any
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
+from pydantic import TypeAdapter
 
 from mia.repositories import (
     KEY_FIELDS,
@@ -124,6 +125,11 @@ class DynamoSessionRepository:
         forbidden = KEY_FIELDS & changes.keys()
         if forbidden:
             raise ValueError(f"campos não podem ser alterados: {sorted(forbidden)}")
+        for field_name, value in changes.items():
+            field = Session.model_fields.get(field_name)
+            if field is None:
+                raise ValueError(f"campo desconhecido: {field_name}")
+            TypeAdapter(field.rebuild_annotation()).validate_python(value)
         current = self.get_session(visitor_id, session_id)
         data = {**current.model_dump(), **changes, "updated_at": self._clock()}
         updated = Session.model_validate(data)  # raises ValidationError (a ValueError)

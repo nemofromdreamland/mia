@@ -2,6 +2,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
+from unittest.mock import Mock
 
 import boto3
 import pytest
@@ -128,6 +129,23 @@ def _session() -> Session:
 
 def test_follows_protocol(tables: tuple[Any, Any]) -> None:
     assert isinstance(DynamoSessionRepository(*tables), SessionRepository)
+
+
+@pytest.mark.parametrize("changes", [{"status": "zzz"}, {"unknown": "value"}])
+def test_update_rejects_invalid_changes_before_dynamo_io(changes: dict[str, Any]) -> None:
+    sessions = Mock()
+    sessions.get_item.side_effect = AssertionError("DynamoDB called before validation")
+    repo = DynamoSessionRepository(sessions, Mock())
+
+    with pytest.raises(ValueError):
+        repo.update_session(
+            "local",
+            "01SESSION",
+            expected_status="preparing",
+            changes=changes,
+        )
+
+    sessions.get_item.assert_not_called()
 
 
 def test_list_turns_follows_pagination(tables: tuple[Any, Any]) -> None:
