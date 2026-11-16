@@ -1,0 +1,43 @@
+# Judge prompt v1 vs v2 on the same model (Haiku), set A. The real prompts live in
+# prompts/judge/v<N>.yaml; "prompt" below is only a marker. Run with -j 1 and --no-cache.
+# Iteration (task 2.9, step 3): only the dev split, only judge-v2:
+#   npx promptfoo eval -c evals/judge_v1_vs_v2.yaml --filter-providers judge-v2 --no-cache -j 1
+# Final run (step 5): remove the `config: {split: dev}` below, both providers, one single time.
+description: "MIA judge v1 vs v2 - set A"
+
+prompts:
+  - "{{item_id}}"
+
+providers:
+  - id: file://providers/judge_provider.py
+    label: judge-v1
+    config:
+      model: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+      prompt_version: 1
+      experiment: judge_v1_vs_v2
+      pythonExecutable: .venv/Scripts/python.exe
+  - id: file://providers/judge_provider.py
+    label: judge-v2
+    config:
+      model: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
+      prompt_version: 2
+      experiment: judge_v1_vs_v2
+      pythonExecutable: .venv/Scripts/python.exe
+
+tests:
+  - path: file://tests_set_a.py:generate_tests
+    config:
+      split: dev   # dev only while tuning; the test split is never used for tuning
+
+defaultTest:
+  assert:
+    - type: python
+      value: file://assertions/judge_asserts.py:assert_schema
+    - type: python
+      value: file://assertions/judge_asserts.py:assert_quotes_verified
+    - type: python
+      value: file://assertions/judge_asserts.py:assert_score_within_one
+
+evaluateOptions:
+  maxConcurrency: 1
+  cache: false
