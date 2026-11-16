@@ -35,9 +35,14 @@ def judge_answer(
     *,
     session_id: str | None = None,
     params: dict[str, Any] | None = None,
+    prompt_version: int | None = None,
     **llm_options: Any,
 ) -> AnswerScore:
-    """Mask the answer, ask the judge prompt, then verify what the LLM returned."""
+    """Mask the answer, ask the judge prompt, then verify what the LLM returned.
+
+    prompt_version picks prompts/judge/v<N>.yaml (evals only); None = JUDGE_PROMPT.
+    """
+    name, default_version = JUDGE_PROMPT
     masked = mask_text(answer)
     variables = {
         "question": question.text,
@@ -45,7 +50,7 @@ def judge_answer(
         "answer": masked,
     }
     score = run_prompt_structured(
-        load_prompt(*JUDGE_PROMPT),
+        load_prompt(name, prompt_version or default_version),
         variables,
         AnswerScore,
         session_id=session_id,

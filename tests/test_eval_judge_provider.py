@@ -93,6 +93,27 @@ def test_run_item_happy_path(tmp_path: Path) -> None:
     assert meta["model"]
 
 
+def test_run_item_metadata_has_default_prompt_version(tmp_path: Path) -> None:
+    result = provider.run_item(
+        _item(), model=None, experiment="x", runs_dir=tmp_path, chat_model=_fake(_reply([]))
+    )
+    assert result["metadata"]["prompt_version"] == 1
+    assert _records(tmp_path)[0]["prompt_version"] == 1
+
+
+def test_run_item_passes_prompt_version(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    def fake_judge(question: Any, answer: str, **kwargs: Any) -> Any:
+        seen.update(kwargs)
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr(provider, "judge_answer", fake_judge)
+    result = provider.run_item(_item(), model=None, experiment="x", prompt_version=2)
+    assert seen["prompt_version"] == 2
+    assert result["error"] == "RuntimeError: stop"
+
+
 def test_run_item_drops_invented_quote(tmp_path: Path) -> None:
     reply = _reply([_real_quote(), "frase que a pessoa nunca disse"])
     result = provider.run_item(
@@ -148,9 +169,14 @@ def test_call_api_reads_config_and_vars(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setattr(provider, "run_item", fake_run_item)
     item = _item()
     context = {"vars": {"item": item.model_dump(mode="json")}}
-    options = {"config": {"model": "bedrock:m", "experiment": "exp_y"}}
+    options = {"config": {"model": "bedrock:m", "experiment": "exp_y", "prompt_version": 2}}
     assert provider.call_api("{{item_id}}", options, context) == {"output": "{}"}
-    assert seen == {"item_id": item.item_id, "model": "bedrock:m", "experiment": "exp_y"}
+    assert seen == {
+        "item_id": item.item_id,
+        "model": "bedrock:m",
+        "experiment": "exp_y",
+        "prompt_version": 2,
+    }
 
 
 def test_call_api_defaults_and_string_item(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -160,7 +186,7 @@ def test_call_api_defaults_and_string_item(monkeypatch: pytest.MonkeyPatch) -> N
     )
     context = {"vars": {"item": _item().model_dump_json()}}
     provider.call_api("p", {}, context)
-    assert seen == {"model": None, "experiment": "promptfoo_set_a"}
+    assert seen == {"model": None, "experiment": "promptfoo_set_a", "prompt_version": None}
 
 
 def test_generate_tests_one_per_item() -> None:

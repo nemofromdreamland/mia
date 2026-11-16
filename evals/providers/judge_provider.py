@@ -28,6 +28,7 @@ def run_item(
     *,
     model: str | None,
     experiment: str,
+    prompt_version: int | None = None,
     runs_dir: Path = DEFAULT_RUNS_DIR,
     chat_model: BaseChatModel | None = None,
 ) -> dict[str, Any]:
@@ -40,6 +41,7 @@ def run_item(
             experiment=experiment,
             runs_dir=runs_dir,
             chat_model=chat_model,
+            prompt_version=prompt_version,
         )
         used = _model_used(model)
     except Exception as exc:  # noqa: BLE001 - one bad item must not stop the whole eval
@@ -52,6 +54,7 @@ def run_item(
             "split": item.split,
             "human_score": item.human_score,
             "model": used,
+            "prompt_version": prompt_version or JUDGE_PROMPT[1],
         },
     }
 
@@ -74,4 +77,5 @@ def call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> d
         item,
         model=config.get("model"),
         experiment=config.get("experiment", DEFAULT_EXPERIMENT),
+        prompt_version=config.get("prompt_version"),
     )

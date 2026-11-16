@@ -177,3 +177,39 @@ def test_default_scorer_fills_score_through_interviewer(tmp_path: Path) -> None:
     assert score is not None
     assert score.quotes_verified is True
     assert score.evidence_quotes == ["reduzi a latência em 30%"]
+
+
+# --- prompt_version (task 2.9) -------------------------------------------------
+
+
+def test_judge_answer_uses_default_prompt_version(tmp_path: Path) -> None:
+    judge_answer(QUESTION, ANSWER, chat_model=_fake(_reply([])), runs_dir=tmp_path)
+    assert _records(tmp_path)[0]["prompt_version"] == 1
+
+
+def test_judge_answer_loads_requested_prompt_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import mia.judge as judge_module
+
+    seen: list[tuple[str, int]] = []
+    real_load = judge_module.load_prompt
+
+    def spy(name: str, version: int, **kwargs: object) -> object:
+        seen.append((name, version))
+        return real_load(name, 1)
+
+    monkeypatch.setattr(judge_module, "load_prompt", spy)
+    judge_answer(
+        QUESTION, ANSWER, prompt_version=2, chat_model=_fake(_reply([])), runs_dir=tmp_path
+    )
+    assert seen == [("judge", 2)]
+
+
+def test_judge_answer_unknown_prompt_version_fails(tmp_path: Path) -> None:
+    from mia.prompts import PromptError
+
+    with pytest.raises(PromptError, match="v99"):
+        judge_answer(
+            QUESTION, ANSWER, prompt_version=99, chat_model=_fake(_reply([])), runs_dir=tmp_path
+        )
