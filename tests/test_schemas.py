@@ -6,10 +6,13 @@ from pydantic import ValidationError
 
 from mia.schemas import (
     AnswerScore,
+    CandidateSummary,
     Case,
+    CaseStats,
     CaseSummary,
     CompetencyScore,
     Evidence,
+    GoldenItem,
     Improvement,
     InterviewPlan,
     Language,
@@ -19,10 +22,13 @@ from mia.schemas import (
     Phase,
     PublicTurn,
     Question,
+    RecruiterCandidateRow,
     Report,
     RunRecord,
     Screening,
+    Session,
     SessionStatus,
+    SummaryPoint,
     ToolDecision,
     Turn,
 )
@@ -455,3 +461,155 @@ def test_improvement_requires_stronger_answer() -> None:
 def test_interview_models_round_trip_through_json(model: Any) -> None:
     assert type(model).model_validate_json(model.model_dump_json()) == model
 
+
+# ---------- Recruiter + Session + Evaluation ----------
+
+
+def _point() -> dict[str, str]:
+    return {"point": "clear", "answer_quote": "I did X"}
+
+
+def _summary_fields(**overrides: Any) -> dict[str, Any]:
+    return {
+        "headline": "Solid junior with good communication.",
+        "summary": "Three to four sentences.",
+        "strengths": [_point()],
+        "concerns": [_point()],
+        "suggested_next_step": "advance",
+        "next_step_reason": "good fit",
+        **overrides,
+    }
+
+
+def _row_fields(**overrides: Any) -> dict[str, Any]:
+    return {
+        "session_id": "s1",
+        "case_id": "c1",
+        "candidate_no": 1,
+        "ended_at": NOW,
+        "overall_score": 4.0,
+        "delta_vs_case_avg": 0.5,
+        "headline": "Good",
+        **overrides,
+    }
+
+
+def _session_fields(**overrides: Any) -> dict[str, Any]:
+    return {
+        "visitor_id": "v1",
+        "session_id": "s1",
+        "status": "ready",
+        "persona": "hr",
+        "language": "pt-BR",
+        "mode": "text",
+        "created_at": NOW,
+        "updated_at": NOW,
+        **overrides,
+    }
+
+
+def _golden_fields(**overrides: Any) -> dict[str, Any]:
+    return {
+        "item_id": "g1",
+        "question": _question_fields(),
+        "answer_text": "An answer.",
+        "variant": "level_3",
+        "paraphrase_of": None,
+        "human_score": 3,
+        "split": "dev",
+        "generated_by": "claude",
+        **overrides,
+    }
+
+
+def test_summary_point_requires_answer_quote() -> None:
+    with pytest.raises(ValidationError):
+        SummaryPoint(point="clear")  # type: ignore[call-arg]
+
+
+def test_candidate_summary_rejects_unknown_next_step() -> None:
+    with pytest.raises(ValidationError):
+        CandidateSummary(**_summary_fields(suggested_next_step="hire"))
+
+
+@pytest.mark.parametrize("field", ["strengths", "concerns"])
+@pytest.mark.parametrize("n", [0, 4])
+def test_candidate_summary_rejects_lists_outside_1_3(field: str, n: int) -> None:
+    with pytest.raises(ValidationError):
+        CandidateSummary(**_summary_fields(**{field: [_point()] * n}))
+
+
+@pytest.mark.parametrize("n", [1, 3])
+def test_candidate_summary_accepts_list_limits(n: int) -> None:
+    assert len(CandidateSummary(**_summary_fields(strengths=[_point()] * n)).strengths) == n
+
+
+def test_candidate_summary_headline_limit_is_140() -> None:
+    assert CandidateSummary(**_summary_fields(headline="a" * 140)).headline == "a" * 140
+    with pytest.raises(ValidationError):
+        CandidateSummary(**_summary_fields(headline="a" * 141))
+
+
+def test_case_stats_accepts_none_average_and_hides_visitor_id() -> None:
+    stats = CaseStats(case_id="c1", completed_sessions=2, average_score=None)
+    assert stats.average_score is None
+    assert "visitor_id" not in stats.model_dump()
+
+
+def test_recruiter_row_accepts_none_delta_and_hides_visitor_id() -> None:
+    row = RecruiterCandidateRow(**_row_fields(delta_vs_case_avg=None))
+    assert row.delta_vs_case_avg is None
+    assert "visitor_id" not in row.model_dump()
+
+
+def test_session_requires_visitor_id() -> None:
+    fields = _session_fields()
+    del fields["visitor_id"]
+    with pytest.raises(ValidationError):
+        Session(**fields)
+
+
+def test_session_rejects_unknown_status() -> None:
+    with pytest.raises(ValidationError):
+        Session(**_session_fields(status="done"))
+
+
+def test_session_minimal_uses_defaults() -> None:
+    session = Session(**_session_fields())
+    assert session.follow_ups_used == 0 and session.turn_count == 0
+    assert session.competency_scores == {} and session.prompt_versions == {}
+    assert session.case_id is None and session.overall_score is None
+
+
+def test_sessions_do_not_share_dicts() -> None:
+    a = Session(**_session_fields())
+    b = Session(**_session_fields())
+    a.competency_scores["x"] = 1.0
+    a.prompt_versions["y"] = 1
+    assert b.competency_scores == {} and b.prompt_versions == {}
+
+
+def test_golden_item_rejects_unknown_split_and_variant() -> None:
+    with pytest.raises(ValidationError):
+        GoldenItem(**_golden_fields(split="train"))
+    with pytest.raises(ValidationError):
+        GoldenItem(**_golden_fields(variant="level_6"))
+
+
+@pytest.mark.parametrize("value", [0, 6])
+def test_golden_item_rejects_human_score_outside_1_5(value: int) -> None:
+    with pytest.raises(ValidationError):
+        GoldenItem(**_golden_fields(human_score=value))
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        CandidateSummary(**_summary_fields()),
+        Session(**_session_fields(started_at=NOW, competency_scores={"python": 4.0})),
+        GoldenItem(**_golden_fields()),
+    ],
+    ids=["summary", "session", "golden"],
+)
+def test_recruiter_session_models_round_trip_through_json(model: Any) -> None:
+    assert type(model).model_validate_json(model.model_dump_json()) == model

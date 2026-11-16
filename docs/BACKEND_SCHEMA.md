@@ -270,7 +270,7 @@ class SummaryPoint(BaseModel):
     answer_quote: str                # deve existir literalmente numa resposta
 
 class CandidateSummary(BaseModel):
-    headline: str                    # uma frase, até 140 caracteres
+    headline: str = Field(max_length=140)  # uma frase
     summary: str                     # 3 a 4 frases sobre o desempenho
     strengths: list[SummaryPoint] = Field(min_length=1, max_length=3)
     concerns: list[SummaryPoint] = Field(min_length=1, max_length=3)

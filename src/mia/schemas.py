@@ -144,6 +144,84 @@ class Report(BaseModel):
     improvements: list[Improvement]
 
 
+# ---------- Recruiter ----------
+
+
+class SummaryPoint(BaseModel):
+    point: str
+    answer_quote: str  # must exist verbatim in an answer (checked by code)
+
+
+class CandidateSummary(BaseModel):
+    headline: str = Field(max_length=140)  # one sentence
+    summary: str  # 3 to 4 sentences about the performance
+    strengths: list[SummaryPoint] = Field(min_length=1, max_length=3)
+    concerns: list[SummaryPoint] = Field(min_length=1, max_length=3)
+    suggested_next_step: Literal["advance", "advance_with_caution", "not_now"]
+    next_step_reason: str
+
+
+class CaseStats(BaseModel):
+    case_id: str
+    completed_sessions: int
+    average_score: float | None  # None with fewer than 3 completed sessions
+
+
+class RecruiterCandidateRow(BaseModel):
+    session_id: str
+    case_id: str
+    candidate_no: int
+    ended_at: datetime
+    overall_score: float
+    delta_vs_case_avg: float | None  # overall_score - average_score
+    headline: str
+
+
+# ---------- Session ----------
+
+
+class Session(BaseModel):
+    visitor_id: str
+    session_id: str
+    case_id: str | None = None
+    case_version: int | None = None
+    candidate_no: int | None = None
+    status: SessionStatus
+    persona: Persona
+    language: Language
+    mode: Mode
+    job_title: str | None = None
+    fit_score: int | None = None
+    overall_score: float | None = None
+    competency_scores: dict[str, float] = Field(default_factory=dict)
+    headline: str | None = None
+    current_question_id: str | None = None
+    follow_ups_used: int = 0
+    turn_count: int = 0
+    prompt_versions: dict[str, int] = Field(default_factory=dict)
+    error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+
+
+# ---------- Evaluation ----------
+
+
+class GoldenItem(BaseModel):
+    item_id: str
+    question: Question
+    answer_text: str
+    variant: Literal[
+        "level_5", "level_4", "level_3", "level_2", "level_1", "rambling", "paraphrase"
+    ]
+    paraphrase_of: str | None
+    human_score: int = Field(ge=1, le=5)
+    split: Literal["dev", "test"]
+    generated_by: str
+
+
 # ---------- Runs ----------
 
 
