@@ -3,7 +3,86 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+Persona = Literal["hr", "technical", "manager"]
+Language = Literal["pt-BR", "en-US"]
+Mode = Literal["text", "voice"]
+Level = Literal["internship", "junior", "mid"]
+SessionStatus = Literal[
+    "preparing", "ready", "in_progress", "scoring", "completed", "failed", "abandoned"
+]
+Phase = Literal["opening", "projects", "technical", "behavioral", "candidate_questions", "closing"]
+
+
+# ---------- Cases ----------
+
+
+class Case(BaseModel):
+    """One of the 5 ready-made demo cases (cases/<case_id>/case.yaml)."""
+
+    case_id: str
+    title: str
+    company: str
+    level: Level
+    persona: Persona
+    language: Language = "pt-BR"
+    blurb: str  # the job in one sentence
+    candidate_blurb: str  # who the visitor plays
+    estimated_minutes: int
+    version: int
+
+
+class CaseSummary(BaseModel):
+    """What GET /cases returns: no CV, no plan."""
+
+    case_id: str
+    title: str
+    company: str
+    level: Level
+    persona: Persona
+    blurb: str
+    candidate_blurb: str
+    estimated_minutes: int
+    completed_sessions: int
+
+
+# ---------- Preparation ----------
+
+
+class Evidence(BaseModel):
+    point: str
+    cv_quote: str  # must exist verbatim in the CV (checked by code)
+
+
+class Screening(BaseModel):
+    job_title: str
+    fit_score: int = Field(ge=0, le=100)
+    strengths: list[Evidence] = Field(min_length=1, max_length=5)
+    concerns: list[Evidence] = Field(min_length=1, max_length=5)
+    missing_keywords: list[str]
+    competencies: list[str] = Field(min_length=3, max_length=6)
+
+
+class Question(BaseModel):
+    id: str
+    phase: Phase
+    competency: str
+    text: str
+    purpose: str
+    look_for: list[str] = Field(min_length=3, max_length=4)
+    follow_ups: list[str] = Field(max_length=3)
+    targets_concern: str | None = None
+
+
+class InterviewPlan(BaseModel):
+    persona: Persona
+    language: Language
+    estimated_minutes: int = Field(ge=5, le=45)
+    questions: list[Question] = Field(min_length=4, max_length=12)
+
+
+# ---------- Runs ----------
 
 
 class RunRecord(BaseModel):
