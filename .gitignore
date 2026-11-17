@@ -29,3 +29,7 @@ crash.log
 # promptfoo cache and exported eval results
 .promptfoo/
 results/*.json
+
+# Playwright output
+frontend/test-results/
+frontend/playwright-report/
