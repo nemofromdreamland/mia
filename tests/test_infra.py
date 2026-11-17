@@ -199,3 +199,32 @@ def test_no_wildcard_actions_in_iam() -> None:
     text = squash((INFRA / "iam.tf").read_text(encoding="utf-8"))
     assert not re.search(r'actions = \[[^\]]*"\*"', text)
     assert not re.search(r'actions = \[[^\]]*"(dynamodb|s3|bedrock|ssm|ecr):\*"', text)
+
+
+# ---------- R7: Budget ----------
+
+
+def test_budget_counts_usage_before_credits() -> None:
+    block = squash(resource_block("aws_budgets_budget", "monthly"))
+    assert 'budget_type = "COST"' in block and 'time_unit = "MONTHLY"' in block
+    assert "include_credit = false" in block
+    assert "var.budget_email" in block and "var.budget_limit_usd" in block
+
+
+def test_budget_alerts() -> None:
+    block = squash(resource_block("aws_budgets_budget", "monthly"))
+    actual = re.findall(
+        r'threshold = (\d+) threshold_type = "PERCENTAGE" notification_type = "ACTUAL"', block
+    )
+    forecast = re.findall(
+        r'threshold = (\d+) threshold_type = "PERCENTAGE" notification_type = "FORECASTED"', block
+    )
+    assert sorted(map(int, actual)) == [50, 80, 100]
+    assert forecast == ["100"]
+
+
+def test_budget_email_has_no_default() -> None:
+    match = re.search(r'variable "budget_email" \{[^}]*\}', squash(read_infra()))
+    assert match
+    block = match.group(0)
+    assert "default" not in block and "sensitive = true" in block
