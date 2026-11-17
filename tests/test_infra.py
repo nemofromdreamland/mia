@@ -302,3 +302,51 @@ def test_api_gateway_may_invoke_the_lambda() -> None:
     block = squash(resource_block("aws_lambda_permission", "api"))
     assert 'principal = "apigateway.amazonaws.com"' in block
     assert "aws_apigatewayv2_api.http.execution_arn" in block
+
+
+# ---------- 4.3: Bedrock Guardrail ----------
+
+
+def guardrail_script():  # type: ignore[no-untyped-def]
+    import importlib.util
+
+    path = INFRA.parent / "scripts" / "create_guardrail.py"
+    spec = importlib.util.spec_from_file_location("create_guardrail", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_guardrail_policy_matches_the_script() -> None:
+    request = guardrail_script().guardrail_request()
+    block = resource_block("aws_bedrock_guardrail", "robustness")
+    flat = squash(block)
+    assert f'name = "{request["name"]}"' in flat
+    topic = request["topicPolicyConfig"]["topicsConfig"][0]
+    assert topic["name"] in block and topic["definition"] in block
+    for example in topic["examples"]:
+        assert example in block
+    assert 'type = "PROMPT_ATTACK"' in flat and 'input_strength = "HIGH"' in flat
+    for word in request["wordPolicyConfig"]["wordsConfig"]:
+        assert f'"{word["text"]}"' in block
+    for pii in request["sensitiveInformationPolicyConfig"]["piiEntitiesConfig"]:
+        assert f'type = "{pii["type"]}" action = "{pii["action"]}"' in flat
+    regex = request["sensitiveInformationPolicyConfig"]["regexesConfig"][0]
+    hcl_pattern = regex["pattern"].replace("\\", "\\\\")
+    assert f'pattern = "{hcl_pattern}"' in flat
+    assert f'blocked_input_messaging = "{request["blockedInputMessaging"]}"' in flat
+
+
+def test_guardrail_imported_from_config() -> None:
+    text = squash(read_infra())
+    assert 'yamldecode(file("${path.module}/../config/guardrails.yaml"))' in text
+    assert "to = aws_bedrock_guardrail.robustness" in text
+    assert "to = aws_bedrock_guardrail_version.robustness" in text
+    assert "local.guardrail_config.robustness.id" in text
+    assert "local.guardrail_config.robustness.version" in text
+
+
+def test_guardrail_version_survives_destroy() -> None:
+    block = squash(resource_block("aws_bedrock_guardrail_version", "robustness"))
+    assert "skip_destroy = true" in block

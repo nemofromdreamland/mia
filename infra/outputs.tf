@@ -27,3 +27,11 @@ output "api_url" {
   description = "Public API base URL (VITE_API_BASE_URL for the frontend, task 4.6)."
   value       = aws_apigatewayv2_stage.default.invoke_url
 }
+
+output "guardrail" {
+  description = "Guardrail id/version (must match config/guardrails.yaml)."
+  value = {
+    id      = aws_bedrock_guardrail.robustness.guardrail_id
+    version = aws_bedrock_guardrail_version.robustness.version
+  }
+}
