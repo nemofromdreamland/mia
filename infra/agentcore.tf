@@ -41,7 +41,7 @@ data "aws_iam_policy_document" "runtime_invoke" {
     sid       = "AllowProxy"
     effect    = "Allow"
     actions   = ["bedrock-agentcore:InvokeAgentRuntime"]
-    resources = ["*"]
+    resources = [aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn]
 
     principals {
       type        = "AWS"
@@ -53,7 +53,7 @@ data "aws_iam_policy_document" "runtime_invoke" {
     sid       = "DenyEveryoneElse"
     effect    = "Deny"
     actions   = ["bedrock-agentcore:InvokeAgentRuntime"]
-    resources = ["*"]
+    resources = [aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn]
 
     principals {
       type        = "*"
