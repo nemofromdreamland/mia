@@ -36,3 +36,6 @@ frontend/playwright-report/
 
 # Demo videos and their recording scripts (task 4.9): kept outside the repo
 media/
+
+# Production run records (task 6.4): free text typed by demo visitors; aggregates only in results/production_summary.md
+runs/*aws*
