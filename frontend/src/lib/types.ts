@@ -78,3 +78,6 @@ export type SessionView = {
   screening: Screening | null;
   turns: PublicTurn[] | null;
 };
+
+/** `POST /sessions/:id/turns`: the next turn, or `ended` when the interview closed. */
+export type AnswerResult = { turn: PublicTurn | null; ended: boolean };

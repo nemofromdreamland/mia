@@ -47,7 +47,9 @@ type Method = "GET" | "POST" | "DELETE";
 
 const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
-async function send(method: Method, path: string, body: unknown, visitorId: string) {
+type RequestOptions = { signal?: AbortSignal };
+
+async function send(method: Method, path: string, body: unknown, visitorId: string, options: RequestOptions) {
   const headers: Record<string, string> = { "X-Visitor-Id": visitorId };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   try {
@@ -55,6 +57,7 @@ async function send(method: Method, path: string, body: unknown, visitorId: stri
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: options.signal,
     });
   } catch {
     throw new ApiError("network", true, null);
@@ -82,12 +85,17 @@ function canRetryWithNewVisitor(path: string): boolean {
   return !path.endsWith("/turns");
 }
 
-export async function apiRequest<T>(method: Method, path: string, body?: unknown): Promise<T> {
-  let response = await send(method, path, body, getVisitorId());
+export async function apiRequest<T>(
+  method: Method,
+  path: string,
+  body?: unknown,
+  options: RequestOptions = {},
+): Promise<T> {
+  let response = await send(method, path, body, getVisitorId(), options);
   if (!response.ok) {
     let error = await toApiError(response);
     if (error.code === "invalid_input" && canRetryWithNewVisitor(path)) {
-      response = await send(method, path, body, resetVisitorId());
+      response = await send(method, path, body, resetVisitorId(), options);
       if (response.ok) return parseBody<T>(response);
       error = await toApiError(response);
     }

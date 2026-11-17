@@ -29,15 +29,6 @@ function RecruiterScreen({ title, tab }: ScreenProps) {
   );
 }
 
-export function InterviewPage() {
-  useDocumentTitle("Entrevista");
-  return (
-    <main className="mx-auto max-w-[680px] px-4 py-12 md:px-6">
-      <h1 className="text-h1">Entrevista</h1>
-    </main>
-  );
-}
-
 export function ReportPage() {
   return <CandidateScreen title="Relatório" tab="Relatório" />;
 }
