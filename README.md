@@ -22,7 +22,7 @@ Portfolio project for Prompt Engineer / AI Engineer roles. The public AWS demo r
 ![Demo: pick a case, answer three questions, get a report with quoted evidence, see the recruiter view](docs/assets/demo.gif)
 
 <sub>Text mode, sped up. The interface is in Portuguese, the product's language.
-Full walkthrough (1:36): <a href="media/demo-desktop.mp4">desktop</a> · <a href="media/demo-mobile.webm">mobile</a>.</sub>
+Full walkthrough (1:36): <a href="https://github.com/nemofromdreamland/mia/releases/download/portfolio-media/demo-desktop.mp4">desktop</a> · <a href="media/demo-mobile.webm">mobile</a>.</sub>
 
 ## Results
 

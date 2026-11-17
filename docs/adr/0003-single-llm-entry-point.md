@@ -1,7 +1,8 @@
 # ADR 0003: `llm.py` is the only module that calls models
 
 - **Status:** accepted
-- **Sources:** `docs/TRD.md` (principles), `src/mia/llm.py`, `tests/test_prompt_models_guard.py`
+- **Sources:** [spec 0.5](../../specs/0.5-llm-minimal.md), `docs/TRD.md` (principles),
+  `src/mia/llm.py`, `tests/test_prompt_models_guard.py`
 
 ## Context
 

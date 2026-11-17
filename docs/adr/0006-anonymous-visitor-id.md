@@ -1,7 +1,8 @@
 # ADR 0006: No login; an anonymous visitor id plus quotas
 
 - **Status:** accepted
-- **Sources:** `docs/TRD.md` (identification, security), `src/mia/api/visitor.py`, `src/mia/quotas.py`
+- **Sources:** [spec 3.4](../../specs/3.4-visitor-quotas.md), `docs/TRD.md` (identification,
+  security), `src/mia/api/visitor.py`, `src/mia/quotas.py`
 
 ## Context
 

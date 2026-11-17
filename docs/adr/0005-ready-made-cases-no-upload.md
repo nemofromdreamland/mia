@@ -1,7 +1,8 @@
 # ADR 0005: The web demo uses 5 ready-made fictitious cases, no CV upload
 
 - **Status:** accepted
-- **Sources:** `docs/PRD.md`, `docs/CASES.md`, `scripts/build_cases.py`, `cases/`
+- **Sources:** [spec 1.12](../../specs/1.12-cases-loader.md), `docs/PRD.md`, `docs/CASES.md`,
+  `scripts/build_cases.py`, `cases/`
 
 ## Context
 
