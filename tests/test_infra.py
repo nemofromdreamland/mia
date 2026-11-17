@@ -15,10 +15,10 @@ def read_infra() -> str:
     return "\n".join(path.read_text(encoding="utf-8") for path in sorted(INFRA.glob("*.tf")))
 
 
-def resource_block(kind: str, name: str) -> str:
-    """Text of `resource "<kind>" "<name>" { ... }` (braces balanced)."""
+def resource_block(kind: str, name: str, keyword: str = "resource") -> str:
+    """Text of `<keyword> "<kind>" "<name>" { ... }` (braces balanced)."""
     text = read_infra()
-    match = re.search(rf'resource\s+"{kind}"\s+"{name}"\s*\{{', text)
+    match = re.search(rf'{keyword}\s+"{kind}"\s+"{name}"\s*\{{', text)
     assert match, f"missing resource {kind}.{name}"
     depth, index = 1, match.end()
     while depth:
@@ -128,3 +128,74 @@ def test_no_secret_in_infra() -> None:
     ]
     for text in texts:
         assert not re.search(r"gsk_[A-Za-z0-9]{10}|AIza[0-9A-Za-z_-]{20}|[ps]k-lf-[0-9a-f]", text)
+
+
+# ---------- R3: ECR ----------
+
+
+def test_ecr_repository() -> None:
+    block = squash(resource_block("aws_ecr_repository", "backend"))
+    assert 'name = "mia-backend"' in block
+    assert 'image_tag_mutability = "IMMUTABLE"' in block
+    assert "scan_on_push = true" in block
+
+
+def test_ecr_keeps_only_five_images() -> None:
+    block = squash(resource_block("aws_ecr_lifecycle_policy", "backend"))
+    assert "countNumber = 5" in block or '"countNumber": 5' in block
+
+
+# ---------- R4: SSM ----------
+
+SECRET_NAMES = ("GEMINI_API_KEY", "GROQ_API_KEY", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY")
+
+
+def test_ssm_secure_strings_with_ignored_value() -> None:
+    block = squash(resource_block("aws_ssm_parameter", "secrets"))
+    for name in SECRET_NAMES:
+        assert f'"{name}"' in block
+    assert 'name = "/mia/${each.key}"' in block
+    assert 'type = "SecureString"' in block
+    assert "ignore_changes = [value]" in block
+
+
+# ---------- R5, R6: IAM ----------
+
+
+def test_runtime_role_trusts_only_agentcore() -> None:
+    text = squash(read_infra())
+    assert 'name = "mia-runtime"' in squash(resource_block("aws_iam_role", "runtime"))
+    assert '"bedrock-agentcore.amazonaws.com"' in text
+    assert "aws:SourceAccount" in text
+
+
+def test_proxy_role_trusts_lambda_and_only_invokes_runtime() -> None:
+    assert 'name = "mia-proxy"' in squash(resource_block("aws_iam_role", "proxy"))
+    assert '"lambda.amazonaws.com"' in read_infra()
+    assert "data.aws_iam_policy_document.proxy.json" in resource_block(
+        "aws_iam_role_policy", "proxy"
+    )
+    proxy = squash(resource_block("aws_iam_policy_document", "proxy", keyword="data"))
+    assert "bedrock-agentcore:InvokeAgentRuntime" in proxy
+    assert "dynamodb:" not in proxy and "s3:" not in proxy
+
+
+def test_runtime_policy_scopes() -> None:
+    text = squash(read_infra())
+    for action in (
+        "dynamodb:GetItem",
+        "dynamodb:Query",
+        "s3:GetObject",
+        "bedrock:InvokeModel",
+        "bedrock:ApplyGuardrail",
+        "ssm:GetParameter",
+        "ecr:BatchGetImage",
+    ):
+        assert action in text
+    assert '"${aws_s3_bucket.data.arn}/sessions/*"' in text
+
+
+def test_no_wildcard_actions_in_iam() -> None:
+    text = squash((INFRA / "iam.tf").read_text(encoding="utf-8"))
+    assert not re.search(r'actions = \[[^\]]*"\*"', text)
+    assert not re.search(r'actions = \[[^\]]*"(dynamodb|s3|bedrock|ssm|ecr):\*"', text)
