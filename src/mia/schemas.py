@@ -1,7 +1,7 @@
 """Pydantic schemas shared across MIA (see docs/BACKEND_SCHEMA.md)."""
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -399,3 +399,89 @@ class RunRecord(BaseModel):
     cost_usd: float
     error: str | None
     created_at: datetime
+
+
+# ---------- Voice (spec 5) ----------
+
+
+class VoiceConfig(BaseModel):
+    """config/voice.yaml: which Sonic model/voice to use and the audio formats."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model_id: str
+    region: str
+    voice_id: str
+    input_sample_rate: int = 16000
+    output_sample_rate: int = 24000
+    max_chunk_bytes: int = Field(default=4096, gt=0)
+
+
+class _ClientEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class SessionStartPayload(_ClientEvent):
+    session_id: str = Field(min_length=1, max_length=64)
+
+
+class AudioChunkPayload(_ClientEvent):
+    data: str = Field(max_length=8192)  # base64; decoded size is checked by the /ws layer
+
+
+class AudioMutePayload(_ClientEvent):
+    muted: bool
+
+
+class EmptyPayload(_ClientEvent):
+    pass
+
+
+class SessionStartEvent(_ClientEvent):
+    type: Literal["session.start"]
+    payload: SessionStartPayload
+
+
+class AudioChunkEvent(_ClientEvent):
+    type: Literal["audio.chunk"]
+    payload: AudioChunkPayload
+
+
+class AudioMuteEvent(_ClientEvent):
+    type: Literal["audio.mute"]
+    payload: AudioMutePayload
+
+
+class SessionEndEvent(_ClientEvent):
+    type: Literal["session.end"]
+    payload: EmptyPayload = Field(default_factory=EmptyPayload)
+
+
+ClientEvent = Annotated[
+    SessionStartEvent | AudioChunkEvent | AudioMuteEvent | SessionEndEvent,
+    Field(discriminator="type"),
+]
+
+ServerEventType = Literal[
+    "audio.output",
+    "transcript",
+    "interrupted",
+    "state",
+    "turn.saved",
+    "session.ended",
+    "error",
+]
+
+
+class ServerEvent(BaseModel):
+    """Backend -> browser event (docs/BACKEND_SCHEMA.md, WebSocket); never a Sonic event."""
+
+    type: ServerEventType
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class VoiceUrl(BaseModel):
+    """POST /sessions/{id}/voice-url: signed WebSocket URL, valid for `expires_in` seconds."""
+
+    url: str
+    expires_in: int = 300

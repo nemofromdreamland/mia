@@ -57,6 +57,12 @@ models:
     usd_per_mtok_output: 1.50
 
 # Per-prompt override: the prompt YAMLs still say Gemini and are never edited (versioning rule).
+  # Nova 2 Sonic (spec 5, voice). Speech tokens dominate the cost; this is the speech
+  # input/output rate (https://aws.amazon.com/bedrock/pricing/, to confirm before citing).
+  "bedrock:amazon.nova-2-sonic-v1:0":
+    usd_per_mtok_input: 3.40
+    usd_per_mtok_output: 13.60
+
 prompt_models:
   candidate_summary: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
   follow_up: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
@@ -67,3 +73,4 @@ prompt_models:
   screening: "bedrock:us.anthropic.claude-haiku-4-5-20251001-v1:0"
   # Another model family generates eval answers, so the judge (Claude) never grades its own family (TRD).
   synthetic_candidate: "groq:openai/gpt-oss-120b"
+  voice_interviewer: "bedrock:amazon.nova-2-sonic-v1:0"

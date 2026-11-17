@@ -84,6 +84,10 @@ class QuotaGate:
         self._global_limit = global_limit
         self._visitor_limit = visitor_limit
 
+    def is_demo_open(self) -> bool:
+        """Kill switch only, no quota unit consumed (voice-url of an existing session)."""
+        return self._store.is_demo_open()
+
     def check(self, visitor_id: str) -> None:
         if not self._store.is_demo_open():
             raise ServiceError("demo_paused", DEMO_PAUSED_MESSAGE)

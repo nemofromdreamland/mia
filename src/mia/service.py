@@ -371,6 +371,37 @@ def end_interview(deps: ServiceDeps, visitor_id: str, session_id: str) -> dict[s
     return {"status": "scoring"}
 
 
+def voice_state(deps: ServiceDeps, visitor_id: str, session_id: str) -> dict[str, Any]:
+    """`state` payload of the voice protocol: phase, question number (1-based), elapsed time."""
+    with _session_lookup():
+        session = deps.repo.get_session(visitor_id, session_id)
+    plan = _load_plan(deps, session)
+    ids = [question.id for question in plan.questions]
+    index = ids.index(session.current_question_id) if session.current_question_id in ids else 0
+    elapsed = 0
+    if session.started_at is not None:
+        elapsed = max(0, int((deps.clock() - session.started_at).total_seconds()))
+    return {
+        "phase": plan.questions[index].phase,
+        "question_no": index + 1,
+        "elapsed_s": elapsed,
+    }
+
+
+def authorize_voice(deps: ServiceDeps, visitor_id: str, session_id: str) -> None:
+    """May this visitor open voice for this session? Owner, `voice` mode, ready/in_progress and
+    demo open. The quota was already consumed by create_session, so nothing is incremented."""
+    with _session_lookup():
+        session = deps.repo.get_session(visitor_id, session_id)
+    from mia.quotas import DEMO_PAUSED_MESSAGE  # quotas imports service: import here
+
+    if session.mode != "voice" or session.status not in ("ready", "in_progress"):
+        raise ServiceError("invalid_state", "Esta sessão não aceita voz agora.")
+    is_open = getattr(deps.gate, "is_demo_open", None)
+    if callable(is_open) and not is_open():
+        raise ServiceError("demo_paused", DEMO_PAUSED_MESSAGE)
+
+
 def get_report(deps: ServiceDeps, visitor_id: str, session_id: str) -> ReportView:
     with _session_lookup():
         session = deps.repo.get_session(visitor_id, session_id)
