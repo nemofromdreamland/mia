@@ -6,11 +6,19 @@ type RubricScoreProps = {
   score: number;
   size?: "sm" | "md";
   showLabel?: boolean;
+  /** Hide the number when it is already shown next to it (Report, Candidate). */
+  showNumber?: boolean;
   className?: string;
 };
 
 /** Design section 5.14: five squares, number and optional label; no quality colors. */
-export function RubricScore({ score, size = "sm", showLabel = false, className }: RubricScoreProps) {
+export function RubricScore({
+  score,
+  size = "sm",
+  showLabel = false,
+  showNumber = true,
+  className,
+}: RubricScoreProps) {
   const filled = Math.round(score);
   const number = Number.isInteger(score) ? formatAnswerScore(score) : formatScore(score);
   const label = rubricLabel(score);
@@ -33,9 +41,11 @@ export function RubricScore({ score, size = "sm", showLabel = false, className }
           />
         ))}
       </span>
-      <span aria-hidden="true" className="font-mono tabular-nums">
-        {number}
-      </span>
+      {showNumber && (
+        <span aria-hidden="true" className="font-mono tabular-nums">
+          {number}
+        </span>
+      )}
       {showLabel && (
         <span aria-hidden="true" className="text-small text-muted-foreground">
           {label}
