@@ -41,6 +41,10 @@ CREDENTIAL_ENV_NAMES = (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_MODELS_PATH = REPO_ROOT / "config" / "models.yaml"
 DEFAULT_RUNS_DIR = REPO_ROOT / "runs"
+# In the AgentCore container runs/ is ephemeral: with this flag each record also goes to
+# stdout (CloudWatch) and scripts/pull_runs.py brings it back into runs/ (spec 4.7b).
+RUNS_STDOUT_ENV = "MIA_RUNS_STDOUT"
+RUN_RECORD_MARKER = "MIA_RUN_RECORD "
 NO_EXPERIMENT = "adhoc"  # file name part when experiment is None
 
 # Wait between retries: exponential backoff from 1 s up to 20 s, plus random jitter
@@ -262,8 +266,11 @@ def append_run_record(
     runs_dir.mkdir(parents=True, exist_ok=True)
     name = f"{record.created_at.date().isoformat()}_{record.experiment or NO_EXPERIMENT}.jsonl"
     path = runs_dir / name
+    line = record.model_dump_json()
     with path.open("a", encoding="utf-8") as file:
-        file.write(record.model_dump_json() + "\n")
+        file.write(line + "\n")
+    if os.environ.get(RUNS_STDOUT_ENV) == "1":
+        print(RUN_RECORD_MARKER + line, flush=True)
     if on_record is not None:
         on_record(record, path)
     return path

@@ -26,6 +26,8 @@ resource "aws_bedrockagentcore_agent_runtime" "backend" {
     AWS_REGION      = var.region
     # Owner asked for more sessions per visitor (spec 4.7a); PRD default in code is 5.
     MIA_VISITOR_DAILY_LIMIT = tostring(var.visitor_daily_limit)
+    # Each RunRecord also to stdout -> CloudWatch; scripts/pull_runs.py (spec 4.7b).
+    MIA_RUNS_STDOUT = "1"
   }
 
   depends_on = [aws_iam_role_policy.runtime]
