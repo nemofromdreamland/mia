@@ -17,10 +17,23 @@ type ConfirmDialogProps = {
   confirmLabel: string;
   onConfirm: () => void;
   onOpenChange: (open: boolean) => void;
+  cancelLabel?: string;
+  confirmVariant?: "default" | "destructive";
+  confirmTestId?: string;
 };
 
 /** Design section 5.23: focus starts on Cancel, Esc cancels. */
-export function ConfirmDialog({ open, title, body, confirmLabel, onConfirm, onOpenChange }: ConfirmDialogProps) {
+export function ConfirmDialog({
+  open,
+  title,
+  body,
+  confirmLabel,
+  onConfirm,
+  onOpenChange,
+  cancelLabel = "Cancelar",
+  confirmVariant = "destructive",
+  confirmTestId,
+}: ConfirmDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="sm:max-w-[420px]">
@@ -30,9 +43,14 @@ export function ConfirmDialog({ open, title, body, confirmLabel, onConfirm, onOp
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel autoFocus className={buttonVariants({ variant: "outline" })}>
-            Cancelar
+            {cancelLabel}
           </AlertDialogCancel>
-          <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={onConfirm}>
+          <AlertDialogAction
+            className={buttonVariants({ variant: confirmVariant })}
+            data-variant={confirmVariant}
+            data-testid={confirmTestId}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
