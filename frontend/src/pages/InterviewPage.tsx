@@ -20,7 +20,8 @@ import { ApiError, apiRequest } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { countQuestions, questionNumbers } from "@/lib/interview";
 import type { AnswerResult, PublicTurn, SessionView } from "@/lib/types";
-import { useVoice, type LiveLine } from "@/voice/useVoice";
+import { liveLines } from "@/voice/lines";
+import { useVoice } from "@/voice/useVoice";
 
 const SLOW_AFTER_MS = 15_000;
 const DRAFT_DELAY_MS = 500;
@@ -122,11 +123,6 @@ function switchToText(id: string): void {
     // Without storage the reload tries voice again.
   }
   window.location.reload(); // reload the turns the voice session saved
-}
-
-/** Voice lines not yet in `turns`; the opening line repeats the last saved turn. */
-function liveLines(lines: LiveLine[], lastText: string | undefined): LiveLine[] {
-  return lines.filter((l, i) => !(i === 0 && l.role === "interviewer" && l.text === lastText));
 }
 
 type InterviewProps = { id: string; view: SessionView; reload: () => Promise<void> };

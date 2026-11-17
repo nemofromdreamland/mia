@@ -105,3 +105,17 @@ describe("InterviewPage in voice mode", () => {
     expect(screen.queryByTestId("voice-bar")).not.toBeInTheDocument();
   });
 });
+
+describe("liveLines", () => {
+  it("hides the re-spoken opening even when split, but keeps later lines", async () => {
+    const { liveLines } = await import("./lines");
+    const last = "Oi, tudo bem? Qual foi o maior desafio?";
+    const lines = [
+      { id: 0, role: "interviewer" as const, text: "Oi, tudo bem?", final: true },
+      { id: 1, role: "interviewer" as const, text: " Qual foi o maior desafio?", final: true },
+      { id: 2, role: "candidate" as const, text: "Foi a latência.", final: true },
+      { id: 3, role: "interviewer" as const, text: "Qual foi o maior desafio?", final: true },
+    ];
+    expect(liveLines(lines, last).map((l) => l.id)).toEqual([2, 3]);
+  });
+});

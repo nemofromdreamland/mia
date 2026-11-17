@@ -86,7 +86,7 @@ data "aws_iam_policy_document" "runtime" {
   # Voice (spec 5): Nova 2 Sonic bidirectional streaming, us-east-1 foundation model.
   statement {
     sid       = "VoiceModel"
-    actions   = ["bedrock:InvokeModelWithBidirectionalStream"]
+    actions   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithBidirectionalStream"]
     resources = ["arn:aws:bedrock:${var.region}::foundation-model/amazon.nova-2-sonic-v1:0"]
   }
 
