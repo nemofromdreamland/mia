@@ -45,3 +45,8 @@ variable "cors_allowed_origins" {
   type        = list(string)
   default     = []
 }
+
+variable "image_tag" {
+  description = "Backend image tag in ECR (12-char commit hash from scripts/push_image.py)."
+  type        = string
+}

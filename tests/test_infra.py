@@ -350,3 +350,38 @@ def test_guardrail_imported_from_config() -> None:
 def test_guardrail_version_survives_destroy() -> None:
     block = squash(resource_block("aws_bedrock_guardrail_version", "robustness"))
     assert "skip_destroy = true" in block
+
+
+# ---------- 4.5: AgentCore Runtime ----------
+
+
+def test_agent_runtime() -> None:
+    block = squash(resource_block("aws_bedrockagentcore_agent_runtime", "backend"))
+    for expected in (
+        'agent_runtime_name = "mia_backend"',
+        "role_arn = aws_iam_role.runtime.arn",
+        'container_uri = "${aws_ecr_repository.backend.repository_url}:${var.image_tag}"',
+        'network_mode = "PUBLIC"',
+        'server_protocol = "HTTP"',
+        'MIA_STORAGE = "aws"',
+        "MIA_DATA_BUCKET = aws_s3_bucket.data.bucket",
+        "AWS_REGION = var.region",
+    ):
+        assert expected in block
+    assert "authorizer_configuration" not in block  # default = IAM (SigV4)
+
+
+def test_live_endpoint() -> None:
+    block = squash(resource_block("aws_bedrockagentcore_agent_runtime_endpoint", "live"))
+    assert 'name = "live"' in block
+    assert "aws_bedrockagentcore_agent_runtime.backend.agent_runtime_id" in block
+    assert "aws_bedrockagentcore_agent_runtime.backend.agent_runtime_version" in block
+
+
+def test_only_the_proxy_may_invoke() -> None:
+    policy = squash(resource_block("aws_iam_policy_document", "runtime_invoke", keyword="data"))
+    assert 'effect = "Deny"' in policy and 'test = "ArnNotEquals"' in policy
+    assert 'variable = "aws:PrincipalArn"' in policy
+    assert policy.count("aws_iam_role.proxy.arn") >= 2
+    attach = squash(resource_block("aws_bedrockagentcore_resource_policy", "runtime"))
+    assert "aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn" in attach

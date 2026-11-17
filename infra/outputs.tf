@@ -35,3 +35,8 @@ output "guardrail" {
     version = aws_bedrock_guardrail_version.robustness.version
   }
 }
+
+output "agent_runtime_arn" {
+  description = "AgentCore runtime the proxy invokes."
+  value       = aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn
+}
