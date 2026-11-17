@@ -5,6 +5,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { SessionNotFound } from "@/components/FullPageState";
 import { InlineNotice } from "@/components/InlineNotice";
 import { AnswerComposer } from "@/components/interview/AnswerComposer";
+import { AnswerExamples } from "@/components/interview/AnswerExamples";
 import { EndPanel } from "@/components/interview/EndPanel";
 import { InterviewHeader } from "@/components/interview/InterviewHeader";
 import { QuestionDivider } from "@/components/interview/QuestionDivider";
@@ -341,6 +342,10 @@ function Interview({ id, view, reload }: InterviewProps) {
         </Footer>
       ) : voiceMode ? (
         <Footer>
+          <AnswerExamples
+            key={voice.lines.filter((l) => l.role === "candidate" && l.final).length}
+            sessionId={id}
+          />
           <VoiceBar
             status={voice.status}
             record={voice.record}
@@ -369,6 +374,14 @@ function Interview({ id, view, reload }: InterviewProps) {
               </div>
             </InlineNotice>
           )}
+          <AnswerExamples
+            key={turns[last]?.turn_no ?? 0}
+            sessionId={id}
+            onUse={(text) => {
+              setDraft(text);
+              composerRef.current?.focus();
+            }}
+          />
           <AnswerComposer
             ref={composerRef}
             value={draft}
