@@ -39,6 +39,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]  # proxy/ (Lambda) is imported by tests/test_proxy.py
 addopts = "--cov=mia --cov-report=term-missing --cov-fail-under=80"
 
 [tool.coverage.run]
