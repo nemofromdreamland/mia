@@ -457,8 +457,15 @@ class SessionEndEvent(_ClientEvent):
     payload: EmptyPayload = Field(default_factory=EmptyPayload)
 
 
+class AnswerSubmitEvent(_ClientEvent):
+    """Spec 5.6: the visitor clicked Enviar; the recorded audio was already sent."""
+
+    type: Literal["answer.submit"]
+    payload: EmptyPayload = Field(default_factory=EmptyPayload)
+
+
 ClientEvent = Annotated[
-    SessionStartEvent | AudioChunkEvent | AudioMuteEvent | SessionEndEvent,
+    SessionStartEvent | AudioChunkEvent | AudioMuteEvent | SessionEndEvent | AnswerSubmitEvent,
     Field(discriminator="type"),
 ]
 

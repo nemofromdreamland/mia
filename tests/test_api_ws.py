@@ -23,7 +23,7 @@ class FakeVoice:
     def __init__(self) -> None:
         self.config = CONFIG
         self.audio: list[bytes] = []
-        self.started = self.closed = self.ended_called = False
+        self.started = self.closed = self.ended_called = self.submitted = False
         self.queue: asyncio.Queue[ServerEvent | None] = asyncio.Queue()
 
     async def start(self) -> None:
@@ -38,8 +38,15 @@ class FakeVoice:
         while (event := await self.queue.get()) is not None:
             yield event
 
-    async def send_audio(self, pcm: bytes) -> None:
+    async def send_client_audio(self, pcm: bytes) -> None:
         self.audio.append(pcm)
+
+    async def keepalive(self) -> None:
+        await asyncio.Event().wait()
+
+    async def submit(self) -> list[ServerEvent]:
+        self.submitted = True
+        return [ServerEvent(type="turn.saved", payload={"turn_no": 1})]
 
     async def end_interview(self) -> None:
         self.ended_called = True
@@ -135,10 +142,12 @@ def test_happy_path_audio_mute_and_end() -> None:
         ws.send_json(chunk(b"\x01\x02"))
         ws.send_json({"type": "audio.mute", "payload": {"muted": True}})
         ws.send_json(chunk(b"\x03\x04"))
+        ws.send_json({"type": "answer.submit", "payload": {}})
+        assert ws.receive_json() == {"type": "turn.saved", "payload": {"turn_no": 1}}
         ws.send_json({"type": "session.end", "payload": {}})
         assert ws.receive_json() == {"type": "session.ended", "payload": {"status": "scoring"}}
     assert voice.audio == [b"\x01\x02", b"\x00\x00"]  # muted audio becomes silence
-    assert voice.ended_called and voice.closed
+    assert voice.ended_called and voice.closed and voice.submitted
 
 
 @pytest.mark.parametrize(

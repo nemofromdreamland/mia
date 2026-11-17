@@ -1,9 +1,10 @@
-"""Voice interview over Nova 2 Sonic (spec 5).
+"""Voice interview over Nova 2 Sonic (specs 5 and 5.6).
 
-Sonic is only ears and mouth: it transcribes the candidate, calls the `submit_answer` tool and
-speaks the text the tool returns. Every decision (follow up, next question, end) is made by the
-same service flow as text mode, through a `Brain`. Audio stays in memory; only masked text is
-saved (the service masks answers; the run record masks the transcript again).
+Sonic is only ears and mouth. The visitor records an answer and clicks Enviar: the code waits for
+Sonic's transcript, runs the same service flow as text mode (`Brain`), saves the turn and decides
+the next line. Sonic then fetches that ready line with the argument-less `next_line` tool and
+reads it (tool results are read word for word; plain text gets paraphrased). Sonic output the
+code did not ask for is dropped. Audio stays in memory; only masked text is saved.
 """
 
 import asyncio
@@ -25,13 +26,17 @@ from mia.schemas import ServerEvent, VoiceConfig
 from mia.service import ServiceDeps, ServiceError
 
 PROMPT_NAME = "voice_interviewer"
-PROMPT_VERSION = 1
-TOOL_NAME = "submit_answer"
-TOOL_SCHEMA = {
-    "type": "object",
-    "properties": {"answer": {"type": "string", "description": "Resposta do candidato."}},
-    "required": ["answer"],
-}
+PROMPT_VERSION = 2
+TOOL_NAME = "next_line"
+SUBMITTED_TEXT = "(resposta enviada)"
+# After the recording is sent: trailing silence lets Sonic finalize the transcript; then we
+# wait until no new candidate text arrives for QUIET_S (at most SUBMIT_TIMEOUT_S).
+TRAILING_SILENCE_S = 1.5
+QUIET_S = 1.2
+SUBMIT_TIMEOUT_S = 8.0
+SILENCE_CHUNK = bytes(3200)  # 100 ms of PCM 16 kHz mono
+KEEPALIVE_S = 0.1
+EMPTY_MESSAGE = "Não entendi o áudio. Grave de novo."
 ENDED_PAYLOAD = {"status": "scoring"}
 
 
@@ -136,7 +141,11 @@ class VoiceSession:
         self._closed = False
         self._role: str | None = None
         self._stage: str | None = None
-        self._pending: list[str] = []  # candidate's final text since the last tool call
+        self._pending: list[str] = []  # candidate's final text since the last submit
+        self._heard_at = 0.0  # monotonic time of the last candidate text
+        self._muted_output = False  # drop Sonic output the code did not ask for
+        self._client_audio_at = 0.0
+        self._next_say: str | None = None
         self._tool: dict[str, Any] | None = None
         self._ending = False
         self._initial_state: dict[str, Any] = {}
@@ -148,7 +157,7 @@ class VoiceSession:
         the opening trigger and a continuous audio input content."""
         opening = await asyncio.to_thread(self.brain.opening)
         self.started_at = self.clock()
-        prompt = render(load_prompt(PROMPT_NAME, PROMPT_VERSION), {"opening": opening.say})
+        prompt = render(load_prompt(PROMPT_NAME, PROMPT_VERSION), {})
         send = self.stream.send
         await send(
             _event(
@@ -158,7 +167,8 @@ class VoiceSession:
         )
         await send(_event("promptStart", self._prompt_start()))
         await self._send_text("SYSTEM", prompt.system, interactive=False)
-        await self._send_text("USER", prompt.user, interactive=True)
+        self._next_say = opening.say  # read through next_line, like every other line
+        await self._send_text("USER", prompt.user.strip(), interactive=True)
         await send(_event("contentStart", self._audio_start()))
         self._initial_state = opening.state
 
@@ -181,9 +191,10 @@ class VoiceSession:
                     {
                         "toolSpec": {
                             "name": TOOL_NAME,
-                            "description": "Entrega a resposta do candidato e devolve a "
-                            "próxima fala da entrevistadora no campo say.",
-                            "inputSchema": {"json": json.dumps(TOOL_SCHEMA)},
+                            "description": "Devolve a próxima fala da entrevistadora no campo say.",
+                            "inputSchema": {
+                                "json": json.dumps({"type": "object", "properties": {}})
+                            },
                         }
                     }
                 ]
@@ -245,6 +256,11 @@ class VoiceSession:
             )
         )
 
+    async def speak(self, text: str) -> None:
+        """Make Sonic read `text`: it fetches it with next_line (see the module docstring)."""
+        self._next_say = text
+        await self._send_text("USER", SUBMITTED_TEXT, interactive=True)
+
     async def _send_tool_result(self, tool_use_id: str, result: dict[str, Any]) -> None:
         name = str(uuid.uuid4())
         await self.stream.send(
@@ -278,6 +294,55 @@ class VoiceSession:
             _event("contentEnd", {"promptName": self.prompt_name, "contentName": name})
         )
 
+    async def _on_tool(self, tool: dict[str, Any]) -> None:
+        say, self._next_say = self._next_say, None
+        if tool.get("toolName") != TOOL_NAME or say is None:
+            await self._send_tool_result(tool.get("toolUseId", ""), {"say": ""})
+            return
+        self._muted_output = False  # from here on, Sonic speaks the line the code chose
+        await self._send_tool_result(tool.get("toolUseId", ""), {"say": say})
+
+    async def send_client_audio(self, pcm: bytes) -> None:
+        """Audio from the visitor's recording; Sonic's own replies are dropped until we speak."""
+        self._client_audio_at = time.monotonic()
+        self._muted_output = True
+        await self.send_audio(pcm)
+
+    async def keepalive(self) -> None:
+        """Sonic expects a continuous audio stream: send silence while the visitor is not
+        sending a recording (the microphone is closed by default)."""
+        while not self._closed:
+            if time.monotonic() - self._client_audio_at > KEEPALIVE_S * 2:
+                await self.send_audio(SILENCE_CHUNK)
+            await asyncio.sleep(KEEPALIVE_S)
+
+    async def submit(self) -> list[ServerEvent]:
+        """The visitor clicked Enviar: wait for the transcript, then run the text-mode flow and
+        speak the next line. The code decides; Sonic never chooses when an answer ends."""
+        for _ in range(int(TRAILING_SILENCE_S / 0.1)):
+            await self.send_audio(SILENCE_CHUNK)
+        started = time.monotonic()
+        while time.monotonic() - started < SUBMIT_TIMEOUT_S:
+            heard = self._pending and time.monotonic() - self._heard_at >= QUIET_S
+            if heard:
+                break
+            await asyncio.sleep(0.1)
+        text = " ".join(t.strip() for t in self._pending).strip()
+        self._pending = []
+        if not text:
+            return [_error(ServiceError("invalid_input", EMPTY_MESSAGE))]
+        try:
+            reply = await asyncio.to_thread(self.brain.answer, text)
+        except ServiceError as exc:
+            return [_error(exc)]
+        await self.speak(reply.say)
+        events = [ServerEvent(type="turn.saved", payload={"turn_no": reply.turn_no})]
+        if reply.ended:
+            self._ending = True
+        elif reply.state:
+            events.append(ServerEvent(type="state", payload=reply.state))
+        return events
+
     # ----- incoming (Sonic -> MIA) -----
 
     async def events(self) -> AsyncIterator[ServerEvent]:
@@ -300,6 +365,8 @@ class VoiceSession:
         if "textOutput" in event:
             return self._on_text(event["textOutput"].get("content", ""))
         if "audioOutput" in event:
+            if self._muted_output:
+                return []
             if self.first_audio_ms is None and self.started_at is not None:
                 self.first_audio_ms = int((self.clock() - self.started_at) * 1000)
             return [
@@ -318,12 +385,17 @@ class VoiceSession:
 
     def _on_text(self, text: str) -> list[ServerEvent]:
         if self._role == "ASSISTANT" and '"interrupted"' in text:
-            return [ServerEvent(type="interrupted")]
+            return []  # no voice barge-in in 5.6: the visitor records instead
         if self._role == "USER":
+            if text.strip() == SUBMITTED_TEXT:
+                return []  # our own marker echoed back
             self._pending.append(text)
+            self._heard_at = time.monotonic()
             self.transcript.append({"role": "candidate", "text": mask_text(text)})
             return [_transcript("candidate", text, final=True)]
         if self._role == "ASSISTANT":
+            if self._muted_output:
+                return []
             final = self._stage != "SPECULATIVE"
             if final:
                 self.transcript.append({"role": "interviewer", "text": text})
@@ -333,31 +405,12 @@ class VoiceSession:
     async def _on_content_end(self, end: dict[str, Any]) -> list[ServerEvent]:
         if end.get("type") == "TOOL" and self._tool is not None:
             tool, self._tool = self._tool, None
-            return await self._on_tool(tool)
+            await self._on_tool(tool)
+            return []
         if self._ending and end.get("type") == "AUDIO" and end.get("stopReason") == "END_TURN":
             self.ended = True
             return [ServerEvent(type="session.ended", payload=ENDED_PAYLOAD)]
         return []
-
-    async def _on_tool(self, tool: dict[str, Any]) -> list[ServerEvent]:
-        tool_use_id = tool.get("toolUseId", "")
-        if tool.get("toolName") != TOOL_NAME:
-            await self._send_tool_result(tool_use_id, {"error": "ferramenta desconhecida"})
-            return []
-        text = " ".join(self._pending).strip() or _tool_answer(tool)
-        self._pending = []
-        try:
-            reply = await asyncio.to_thread(self.brain.answer, text)
-        except ServiceError as exc:
-            await self._send_tool_result(tool_use_id, {"say": "Pode repetir, por favor?"})
-            return [_error(exc)] if exc.code != "invalid_input" else []
-        await self._send_tool_result(tool_use_id, {"say": reply.say})
-        events = [ServerEvent(type="turn.saved", payload={"turn_no": reply.turn_no})]
-        if reply.ended:
-            self._ending = True
-        elif reply.state:
-            events.append(ServerEvent(type="state", payload=reply.state))
-        return events
 
     # ----- shutdown -----
 
@@ -412,11 +465,3 @@ def _error(exc: ServiceError) -> ServerEvent:
         type="error",
         payload={"code": exc.code, "message": exc.message, "retryable": exc.retryable},
     )
-
-
-def _tool_answer(tool: dict[str, Any]) -> str:
-    try:
-        answer = json.loads(tool.get("content") or "{}").get("answer", "")
-    except (ValueError, AttributeError):
-        return ""
-    return answer if isinstance(answer, str) else ""

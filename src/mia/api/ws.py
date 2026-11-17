@@ -19,6 +19,7 @@ from pydantic import TypeAdapter, ValidationError
 from mia.api.visitor import parse_visitor_id
 from mia.llm import load_voice_config, open_sonic_stream
 from mia.schemas import (
+    AnswerSubmitEvent,
     AudioChunkEvent,
     AudioMuteEvent,
     ClientEvent,
@@ -128,8 +129,9 @@ async def _bridge(ws: WebSocket, voice: VoiceSession) -> None:
     """Run browser->Sonic and Sonic->browser until one side finishes."""
     outgoing = asyncio.create_task(_pump_out(ws, voice))
     incoming = asyncio.create_task(_pump_in(ws, voice))
+    keepalive = asyncio.create_task(voice.keepalive())
     done, pending = await asyncio.wait({outgoing, incoming}, return_when=asyncio.FIRST_COMPLETED)
-    for task in pending:
+    for task in [*pending, keepalive]:
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await task
@@ -155,7 +157,10 @@ async def _pump_in(ws: WebSocket, voice: VoiceSession) -> None:
             if isinstance(event, AudioChunkEvent):
                 pcm = decode_chunk(event, voice.config)
                 # Muted: keep the stream alive with silence, never the visitor's audio.
-                await voice.send_audio(bytes(len(pcm)) if muted else pcm)
+                await voice.send_client_audio(bytes(len(pcm)) if muted else pcm)
+            elif isinstance(event, AnswerSubmitEvent):
+                for reply in await voice.submit():
+                    await ws.send_json(reply.model_dump())
             elif isinstance(event, AudioMuteEvent):
                 muted = event.payload.muted
             elif isinstance(event, SessionEndEvent):
