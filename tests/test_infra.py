@@ -454,3 +454,10 @@ def test_spa_fallback() -> None:
             f"custom_error_response {{ error_code = {code} response_code = 200 "
             'response_page_path = "/index.html"' in block
         )
+
+
+def test_visitor_limit_goes_to_the_runtime() -> None:
+    block = squash(resource_block("aws_bedrockagentcore_agent_runtime", "backend"))
+    assert "MIA_VISITOR_DAILY_LIMIT = tostring(var.visitor_daily_limit)" in block
+    match = re.search(r'variable "visitor_daily_limit" \{[^}]*\}', squash(read_infra()))
+    assert match and "default = 20" in match.group(0)

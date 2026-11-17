@@ -24,6 +24,8 @@ resource "aws_bedrockagentcore_agent_runtime" "backend" {
     MIA_STORAGE     = "aws"
     MIA_DATA_BUCKET = aws_s3_bucket.data.bucket
     AWS_REGION      = var.region
+    # Owner asked for more sessions per visitor (spec 4.7a); PRD default in code is 5.
+    MIA_VISITOR_DAILY_LIMIT = tostring(var.visitor_daily_limit)
   }
 
   depends_on = [aws_iam_role_policy.runtime]

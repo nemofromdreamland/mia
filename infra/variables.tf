@@ -38,3 +38,9 @@ variable "image_tag" {
   description = "Backend image tag in ECR (12-char commit hash from scripts/push_image.py)."
   type        = string
 }
+
+variable "visitor_daily_limit" {
+  description = "Sessions per visitor per day (MIA_VISITOR_DAILY_LIMIT in the runtime)."
+  type        = number
+  default     = 20
+}
