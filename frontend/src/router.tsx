@@ -1,11 +1,9 @@
 import type { RouteObject } from "react-router";
-import {
-  CandidatePage,
-} from "@/pages/placeholders";
 import { HomePage } from "@/pages/HomePage";
 import { InterviewPage } from "@/pages/InterviewPage";
 import { PrepPage } from "@/pages/PrepPage";
 import { RecruiterPage } from "@/pages/RecruiterPage";
+import { CandidatePage } from "@/pages/CandidatePage";
 import { ReportPage } from "@/pages/ReportPage";
 
 export const routes: RouteObject[] = [
