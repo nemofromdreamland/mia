@@ -228,3 +228,28 @@ def test_budget_email_has_no_default() -> None:
     assert match
     block = match.group(0)
     assert "default" not in block and "sensitive = true" in block
+
+
+# ---------- 4.2 R2: Lambda proxy ----------
+
+
+def test_proxy_lambda() -> None:
+    block = squash(resource_block("aws_lambda_function", "proxy"))
+    for expected in (
+        'function_name = "mia-proxy"',
+        'runtime = "python3.12"',
+        'architectures = ["arm64"]',
+        'handler = "proxy.handler.lambda_handler"',
+        "timeout = 30",
+        "memory_size = 256",
+        "role = aws_iam_role.proxy.arn",
+        "AGENT_RUNTIME_ARN = var.agent_runtime_arn",
+        'AGENT_RUNTIME_QUALIFIER = "DEFAULT"',
+        'filebase64sha256("${path.module}/../build/proxy.zip")',
+    ):
+        assert expected in block
+
+
+def test_proxy_log_group_keeps_7_days() -> None:
+    block = squash(resource_block("aws_cloudwatch_log_group", "proxy"))
+    assert 'name = "/aws/lambda/mia-proxy"' in block and "retention_in_days = 7" in block

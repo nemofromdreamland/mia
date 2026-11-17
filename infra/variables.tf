@@ -33,3 +33,15 @@ variable "bedrock_profile_regions" {
   type        = list(string)
   default     = ["us-east-1", "us-east-2", "us-west-2"]
 }
+
+variable "agent_runtime_arn" {
+  description = "AgentCore runtime the proxy invokes (filled in task 4.5)."
+  type        = string
+  default     = ""
+}
+
+variable "cors_allowed_origins" {
+  description = "Browser origins allowed by CORS: only the CloudFront domain (task 4.6)."
+  type        = list(string)
+  default     = []
+}
