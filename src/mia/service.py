@@ -27,6 +27,14 @@ from mia.interviewer import (
 )
 from mia.interviewer import end_interview as close_interview
 from mia.llm import LLMInvalidOutputError
+from mia.recruiter import (
+    above_average_rows,
+    build_row,
+    case_average,
+    case_stats,
+    is_above_average,
+    sort_rows,
+)
 from mia.report_graph import ReportError, ReportResult
 from mia.repositories import (
     CandidateCounter,
@@ -54,7 +62,6 @@ from mia.schemas import (
 )
 from mia.simulation import new_session_id
 
-MIN_SESSIONS_FOR_AVERAGE = 3  # the case average only exists from here on
 SESSION_MAX_MINUTES = 45  # session_limit; the interviewer's own closing (<= 15 min) is separate
 
 ErrorCode = Literal[
@@ -364,30 +371,9 @@ def get_report(deps: ServiceDeps, visitor_id: str, session_id: str) -> ReportVie
             raise ServiceError("invalid_state", "O relatório ainda não está pronto.")
         report, _ = deps.reports.load(session_id)
     turns = deps.repo.list_turns(visitor_id, session_id)
-    average = _case_average(deps.repo.list_completed(session.case_id)) if session.case_id else None
-    above = None if average is None else (session.overall_score or 0.0) > average
+    completed = deps.repo.list_completed(session.case_id) if session.case_id else []
+    above = is_above_average(session.overall_score, case_average(completed))
     return ReportView(report=report, turns=turns, is_above_case_avg=above)
-
-
-def _case_average(completed: list[Session]) -> float | None:
-    """Mean `overall_score` of a case's completed sessions; None with fewer than 3."""
-    if len(completed) < MIN_SESSIONS_FOR_AVERAGE:
-        return None
-    return sum(s.overall_score or 0.0 for s in completed) / len(completed)
-
-
-def _row(session: Session, average: float | None) -> RecruiterCandidateRow:
-    """Anonymous row: built field by field, so `visitor_id` cannot leak."""
-    score = session.overall_score or 0.0
-    return RecruiterCandidateRow(
-        session_id=session.session_id,
-        case_id=session.case_id or "",
-        candidate_no=session.candidate_no or 0,
-        ended_at=session.ended_at or session.updated_at,
-        overall_score=score,
-        delta_vs_case_avg=None if average is None else round(score - average, 2),
-        headline=session.headline or "",
-    )
 
 
 def list_recruiter_candidates(deps: ServiceDeps, case_id: str | None = None) -> RecruiterList:
@@ -395,22 +381,10 @@ def list_recruiter_candidates(deps: ServiceDeps, case_id: str | None = None) -> 
     stats: list[CaseStats] = []
     rows: list[RecruiterCandidateRow] = []
     for cid in case_ids:
-        completed = deps.repo.list_completed(cid)
-        average = _case_average(completed)
-        stats.append(
-            CaseStats(
-                case_id=cid,
-                completed_sessions=len(completed),
-                average_score=None if average is None else round(average, 2),
-            )
-        )
-        above = [s for s in completed if average is None or (s.overall_score or 0.0) > average]
-        rows.extend(_row(s, average) for s in above)
-    rows.sort(
-        key=lambda r: (r.delta_vs_case_avg is not None, r.delta_vs_case_avg or 0.0, r.ended_at),
-        reverse=True,
-    )
-    return RecruiterList(stats=stats, candidates=rows)
+        completed = deps.repo.list_completed(cid)  # GSI `by_case` on DynamoDB
+        stats.append(case_stats(cid, completed))
+        rows.extend(above_average_rows(completed))
+    return RecruiterList(stats=stats, candidates=sort_rows(rows))
 
 
 def get_recruiter_candidate(deps: ServiceDeps, session_id: str) -> RecruiterCandidate:
@@ -418,10 +392,10 @@ def get_recruiter_candidate(deps: ServiceDeps, session_id: str) -> RecruiterCand
     session = next((s for s in completed if s.session_id == session_id), None)
     if session is None:
         raise ServiceError("not_found", "Candidato não encontrado.")
-    same_case = [s for s in completed if s.case_id == session.case_id]
+    same_case = deps.repo.list_completed(session.case_id) if session.case_id else []
     with _session_lookup():
         report, summary = deps.reports.load(session_id)
         turns = deps.repo.list_turns(session.visitor_id, session_id)
     return RecruiterCandidate(
-        row=_row(session, _case_average(same_case)), summary=summary, report=report, turns=turns
+        row=build_row(session, case_average(same_case)), summary=summary, report=report, turns=turns
     )

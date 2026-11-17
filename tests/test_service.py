@@ -558,3 +558,21 @@ def test_get_report_is_above_case_avg_with_three_sessions() -> None:
 
     assert get_report(deps, VISITOR_B, high).is_above_case_avg is True
     assert get_report(deps, VISITOR_A, low).is_above_case_avg is False
+
+
+def test_recruiter_detail_average_queries_the_case_index() -> None:
+    deps = make_deps()
+    ids = [complete_with_score(deps, v, s) for v, s in ((VISITOR_A, 2.0), (VISITOR_B, 4.0))]
+    complete_with_score(deps, "33333333-3333-4333-8333-333333333333", 3.0)
+    asked: list[str | None] = []
+    original = deps.repo.list_completed
+
+    def spy(case_id: str | None = None):
+        asked.append(case_id)
+        return original(case_id)
+
+    deps.repo.list_completed = spy  # type: ignore[method-assign]
+    detail = get_recruiter_candidate(deps, ids[1])
+
+    assert CASE_ID in asked  # the average comes from the by_case query
+    assert detail.row.delta_vs_case_avg == 1.0
