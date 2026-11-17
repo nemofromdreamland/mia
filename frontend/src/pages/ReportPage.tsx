@@ -1,23 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router";
-import { Check } from "lucide-react";
+import { useNavigate, useParams } from "react-router";
+import { Check, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { SessionNotFound } from "@/components/FullPageState";
 import { InlineNotice } from "@/components/InlineNotice";
 import { MiaMark } from "@/components/MiaMark";
 import { AboveAverageNote } from "@/components/report/AboveAverageNote";
+import { AnswerByAnswer } from "@/components/report/AnswerByAnswer";
 import { CompetencyRow } from "@/components/report/CompetencyRow";
+import { FullTranscript } from "@/components/report/FullTranscript";
 import { MiaSuggestion } from "@/components/report/MiaSuggestion";
 import { RubricScore } from "@/components/RubricScore";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { usePolling } from "@/hooks/usePolling";
 import { useSessionView } from "@/hooks/useSessionView";
 import { ApiError, apiRequest } from "@/lib/api";
+import { errorMessage } from "@/lib/errors";
 import { formatDateLong, formatMinutes, formatScore } from "@/lib/format";
 import { countQuestions, questionNumbers } from "@/lib/interview";
 import { interviewName } from "@/lib/labels";
 import { durationMinutes, previousAttempt } from "@/lib/report";
+import { routeForStatus } from "@/lib/routes";
 import type { ReportView, Session, SessionView } from "@/lib/types";
 
 const LOAD_ERROR = "Não foi possível carregar o feedback.";
@@ -209,6 +215,61 @@ function ReportBody({ session, data, previous }: ReportBodyProps) {
           ))
         )}
       </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-h2">Resposta por resposta</h2>
+        <AnswerByAnswer turns={turns} persona={session.persona} />
+      </section>
+
+      <FullTranscript turns={turns} persona={session.persona} />
+
+      <Actions session={session} />
     </>
+  );
+}
+
+const BLOCKING = new Set(["quota_exceeded", "demo_paused"]);
+
+/** "Treinar este caso de novo" respects the quotas, like the CaseDialog (10.1). */
+function Actions({ session }: { session: Session }) {
+  const navigate = useNavigate();
+  const [creating, setCreating] = useState(false);
+  const [blocked, setBlocked] = useState<ApiError | null>(null);
+  const caseId = session.case_id;
+
+  async function trainAgain() {
+    if (!caseId || creating || blocked) return;
+    setCreating(true);
+    try {
+      const created = await apiRequest<Session>("POST", "/sessions", { case_id: caseId, mode: session.mode });
+      navigate(routeForStatus(created.status, created.session_id).path);
+    } catch (err) {
+      setCreating(false);
+      if (!(err instanceof ApiError)) return;
+      if (BLOCKING.has(err.code)) setBlocked(err);
+      else toast(errorMessage(err, "case_dialog").text);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {blocked && <InlineNotice variant="warning">{errorMessage(blocked, "case_dialog").text}</InlineNotice>}
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+        <Button variant="outline" className="w-full sm:w-auto" onClick={() => navigate("/")}>
+          Voltar ao início
+        </Button>
+        {caseId && (
+          <Button
+            className="w-full sm:w-auto"
+            aria-disabled={creating || blocked !== null}
+            aria-busy={creating}
+            onClick={() => void trainAgain()}
+          >
+            {creating && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            {creating ? "Criando…" : "Treinar este caso de novo"}
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
