@@ -40,3 +40,18 @@ output "agent_runtime_arn" {
   description = "AgentCore runtime the proxy invokes."
   value       = aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn
 }
+
+output "web_url" {
+  description = "Public URL of the demo."
+  value       = "https://${aws_cloudfront_distribution.web.domain_name}"
+}
+
+output "web_bucket" {
+  description = "Bucket scripts/deploy_web.py uploads to."
+  value       = aws_s3_bucket.web.bucket
+}
+
+output "web_distribution_id" {
+  description = "Distribution scripts/deploy_web.py invalidates."
+  value       = aws_cloudfront_distribution.web.id
+}

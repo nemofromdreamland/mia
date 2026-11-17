@@ -4,16 +4,12 @@ resource "aws_apigatewayv2_api" "http" {
   name          = "mia-api"
   protocol_type = "HTTP"
 
-  # CORS only for the CloudFront domain (task 4.6); no CORS while the list is empty.
-  dynamic "cors_configuration" {
-    for_each = length(var.cors_allowed_origins) > 0 ? [1] : []
-
-    content {
-      allow_origins = var.cors_allowed_origins
-      allow_methods = ["GET", "POST", "DELETE"]
-      allow_headers = ["content-type", "x-visitor-id"]
-      max_age       = 3600
-    }
+  # CORS only for the CloudFront domain (TRD, "Borda pública").
+  cors_configuration {
+    allow_origins = ["https://${aws_cloudfront_distribution.web.domain_name}"]
+    allow_methods = ["GET", "POST", "DELETE"]
+    allow_headers = ["content-type", "x-visitor-id"]
+    max_age       = 3600
   }
 }
 

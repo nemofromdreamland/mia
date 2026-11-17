@@ -288,12 +288,12 @@ def test_stage_throttling() -> None:
     assert "throttling_rate_limit = 5" in block and "throttling_burst_limit = 10" in block
 
 
-def test_cors_only_for_configured_origins() -> None:
+def test_cors_only_for_the_cloudfront_domain() -> None:
     block = squash(resource_block("aws_apigatewayv2_api", "http"))
     assert 'protocol_type = "HTTP"' in block
-    assert 'dynamic "cors_configuration"' in block
-    assert "var.cors_allowed_origins" in block
+    assert 'allow_origins = ["https://${aws_cloudfront_distribution.web.domain_name}"]' in block
     assert '"x-visitor-id"' in block and '"content-type"' in block
+    assert "cors_allowed_origins" not in read_infra()
 
 
 def test_api_gateway_may_invoke_the_lambda() -> None:
@@ -400,3 +400,57 @@ def test_proxy_policy_scoped_to_the_runtime() -> None:
     proxy = squash(resource_block("aws_iam_policy_document", "proxy", keyword="data"))
     assert "runtime/mia*" not in proxy
     assert "aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn" in proxy
+
+
+# ---------- 4.6: web bucket + CloudFront ----------
+
+CACHING_OPTIMIZED = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+SECURITY_HEADERS = "67f7725c-6f97-4210-82d7-5512b31e9d03"
+
+
+def test_web_bucket_is_private() -> None:
+    assert "mia-web-${" in resource_block("aws_s3_bucket", "web")
+    block = squash(resource_block("aws_s3_bucket_public_access_block", "web"))
+    for flag in (
+        "block_public_acls",
+        "block_public_policy",
+        "ignore_public_acls",
+        "restrict_public_buckets",
+    ):
+        assert f"{flag} = true" in block
+    assert '"AES256"' in resource_block("aws_s3_bucket_server_side_encryption_configuration", "web")
+    assert '"BucketOwnerEnforced"' in resource_block("aws_s3_bucket_ownership_controls", "web")
+
+
+def test_only_cloudfront_reads_the_web_bucket() -> None:
+    oac = squash(resource_block("aws_cloudfront_origin_access_control", "web"))
+    assert 'signing_protocol = "sigv4"' in oac and 'origin_access_control_origin_type = "s3"' in oac
+    policy = squash(resource_block("aws_iam_policy_document", "web_bucket", keyword="data"))
+    assert '"cloudfront.amazonaws.com"' in policy
+    assert (
+        'variable = "AWS:SourceArn"' in policy and "aws_cloudfront_distribution.web.arn" in policy
+    )
+    assert '"s3:GetObject"' in policy
+
+
+def test_distribution() -> None:
+    block = squash(resource_block("aws_cloudfront_distribution", "web"))
+    for expected in (
+        'default_root_object = "index.html"',
+        'viewer_protocol_policy = "redirect-to-https"',
+        f'cache_policy_id = "{CACHING_OPTIMIZED}"',
+        f'response_headers_policy_id = "{SECURITY_HEADERS}"',
+        'price_class = "PriceClass_100"',
+        "cloudfront_default_certificate = true",
+        "origin_access_control_id = aws_cloudfront_origin_access_control.web.id",
+    ):
+        assert expected in block
+
+
+def test_spa_fallback() -> None:
+    block = squash(resource_block("aws_cloudfront_distribution", "web"))
+    for code in (403, 404):
+        assert (
+            f"custom_error_response {{ error_code = {code} response_code = 200 "
+            'response_page_path = "/index.html"' in block
+        )

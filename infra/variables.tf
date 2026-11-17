@@ -34,12 +34,6 @@ variable "bedrock_profile_regions" {
   default     = ["us-east-1", "us-east-2", "us-west-2"]
 }
 
-variable "cors_allowed_origins" {
-  description = "Browser origins allowed by CORS: only the CloudFront domain (task 4.6)."
-  type        = list(string)
-  default     = []
-}
-
 variable "image_tag" {
   description = "Backend image tag in ECR (12-char commit hash from scripts/push_image.py)."
   type        = string
