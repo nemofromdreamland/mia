@@ -65,7 +65,7 @@ def visitor_key(visitor_id: str) -> str:
 
 
 GLOBAL_EXCEEDED_MESSAGE = "A demo atingiu o limite de hoje. Volte amanhã."
-VISITOR_EXCEEDED_MESSAGE = "Você já fez 5 simulações hoje. Volte amanhã para fazer mais."
+VISITOR_EXCEEDED_MESSAGE = "Você já fez {limit} simulações hoje. Volte amanhã para fazer mais."
 DEMO_PAUSED_MESSAGE = (
     "A demo está pausada no momento. O histórico e a tela do recrutador continuam disponíveis."
 )
@@ -97,4 +97,6 @@ class QuotaGate:
             visitor_key(visitor_id), sk, self._visitor_limit, expires_at
         ):
             self._store.decrement(global_key(), sk)  # give the global unit back
-            raise ServiceError("quota_exceeded", VISITOR_EXCEEDED_MESSAGE)
+            raise ServiceError(
+                "quota_exceeded", VISITOR_EXCEEDED_MESSAGE.format(limit=self._visitor_limit)
+            )
