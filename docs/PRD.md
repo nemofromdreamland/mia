@@ -113,7 +113,10 @@ O MVP é o modo texto completo com os casos e a tela do recrutador; a voz é uma
 | RF-15 | Avisar o visitante, antes de começar, que as respostas ficam anônimas e podem aparecer para o recrutador; permitir apagar a própria sessão | MVP |
 | RF-16 | CLI local: simular com CV e vaga avulsos (fictícios) e gerar as fixtures dos casos | MVP |
 | RF-17 | Conduzir a mesma entrevista por voz em tempo real, com interrupção | Voz |
-| RF-18 | Casos e entrevista em inglês | Depois do MVP |
+| RF-18 | Limitar cada resposta falada a uma duração configurável, com contagem regressiva e aviso visual; ao atingir o limite, parar a captura e enviar o trecho falado, com aplicação determinística também no servidor | Voz |
+| RF-19 | Oferecer, sob demanda e sem chamada adicional de modelo, 2 ou 3 dicas curtas sobre o que abordar, sem revelar critérios de avaliação nem fornecer resposta pronta ou alterar a nota | Voz |
+| RF-20 | Usar para a MIA uma voz feminina em português do Brasil, escolhida por configuração e nunca fixada no código | Voz |
+| RF-21 | Casos e entrevista em inglês | Depois do MVP |
 
 ## Requisitos não funcionais
 
