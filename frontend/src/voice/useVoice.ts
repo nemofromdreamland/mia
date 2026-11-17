@@ -1,48 +1,51 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
-import { INPUT_RATE, bytesToBase64, chunkBytes, downsample, floatTo16 } from "./pcm";
+import { bytesToBase64, chunkBytes } from "./pcm";
 import { Player } from "./playback";
-import { workletUrl } from "./worklet";
+import { Recorder, playRecording } from "./recorder";
 
-/** Design section 8 states (reconnect is out of scope in spec 5: a drop goes to "failed"). */
-export type VoiceStatus =
-  | "mic"
-  | "denied"
-  | "connecting"
-  | "speaking"
-  | "listening"
-  | "interrupted"
-  | "thinking"
-  | "failed"
-  | "ended";
+/** Connection / MIA state (Design section 8, adapted to recorded answers in spec 5.6). */
+export type VoiceStatus = "connecting" | "speaking" | "listening" | "thinking" | "failed" | "ended";
+/** The visitor's recording, like an audio message: nothing is sent before "Enviar". */
+export type RecordState = "idle" | "recording" | "recorded" | "playing" | "denied";
 
 export type LiveLine = { id: number; role: "interviewer" | "candidate"; text: string; final: boolean };
-export type VoiceState = { phase?: string; question_no?: number; elapsed_s?: number };
 
 type ServerEvent = { type: string; payload?: Record<string, unknown> };
 
-const INTERRUPTED_MS = 1500;
+const RECORD_TICK_MS = 250;
 
 export type UseVoice = {
   status: VoiceStatus;
-  muted: boolean;
+  record: RecordState;
+  recordedSeconds: number;
+  notice: string | null;
   lines: LiveLine[];
   error: ApiError | null;
-  toggleMute: () => void;
+  startRecording: () => void;
+  stopRecording: () => void;
+  play: () => void;
+  discard: () => void;
+  send: () => void;
   /** Sends session.end over the socket; false when not connected (use REST /end). */
   end: () => boolean;
-  retry: () => void;
 };
 
-/** Mic -> AudioWorklet -> PCM 16 kHz -> /ws; /ws -> PCM 24 kHz -> speakers. Nothing is stored. */
+export const NOT_UNDERSTOOD = "Não entendi o áudio. Grave de novo.";
+
+/** /ws -> PCM 24 kHz -> speakers; the visitor's recording -> /ws only on send(). */
 export function useVoice(sessionId: string, enabled: boolean, onEnded: () => void): UseVoice {
-  const [status, setStatus] = useState<VoiceStatus>("mic");
-  const [muted, setMuted] = useState(false);
+  const [status, setStatus] = useState<VoiceStatus>("connecting");
+  const [record, setRecord] = useState<RecordState>("idle");
+  const [recordedSeconds, setRecordedSeconds] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
   const [lines, setLines] = useState<LiveLine[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
-  const [attempt, setAttempt] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
-  const mutedRef = useRef(false);
+  const recorderRef = useRef<Recorder | null>(null);
+  const recordingRef = useRef<Int16Array | null>(null);
+  const stopPlaybackRef = useRef<(() => void) | null>(null);
+  const tickRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const endingRef = useRef(false);
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
@@ -50,23 +53,14 @@ export function useVoice(sessionId: string, enabled: boolean, onEnded: () => voi
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    let stream: MediaStream | null = null;
-    let captureCtx: AudioContext | null = null;
     let player: Player | null = null;
     let ws: WebSocket | null = null;
     let nextId = 0;
-    let interruptTimer: ReturnType<typeof setTimeout> | undefined;
     endingRef.current = false;
-    setStatus("mic");
-
-    const send = (event: object) => {
-      if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event));
-    };
 
     const onLine = (role: LiveLine["role"], text: string, final: boolean) => {
       setLines((list) => {
         const last = list[list.length - 1];
-        // A partial line is replaced by the next partial/final of the same speaker.
         if (last && last.role === role && !last.final) {
           return [...list.slice(0, -1), { ...last, text, final }];
         }
@@ -86,17 +80,10 @@ export function useVoice(sessionId: string, enabled: boolean, onEnded: () => voi
       switch (event.type) {
         case "audio.output":
           player?.play(String(p.data ?? ""));
-          setStatus((s) => (s === "interrupted" ? s : "speaking"));
+          setStatus("speaking");
           break;
         case "transcript":
           onLine(p.role === "candidate" ? "candidate" : "interviewer", String(p.text ?? ""), Boolean(p.final));
-          if (p.role === "candidate" && p.final) setStatus("thinking");
-          break;
-        case "interrupted":
-          player?.stop();
-          setStatus("interrupted");
-          clearTimeout(interruptTimer);
-          interruptTimer = setTimeout(() => setStatus("listening"), INTERRUPTED_MS);
           break;
         case "session.ended":
           endingRef.current = true;
@@ -105,23 +92,18 @@ export function useVoice(sessionId: string, enabled: boolean, onEnded: () => voi
           break;
         case "error": {
           const code = String(p.code ?? "internal") as ApiError["code"];
-          setError(new ApiError(code, Boolean(p.retryable), null));
+          if (code === "invalid_input") {
+            setNotice(NOT_UNDERSTOOD);
+            setStatus("listening");
+          } else {
+            setError(new ApiError(code, Boolean(p.retryable), null));
+          }
           break;
         }
       }
     };
 
     async function run() {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
-        });
-      } catch {
-        if (!cancelled) setStatus("denied");
-        return;
-      }
-      if (cancelled) return;
-      setStatus("connecting");
       try {
         const { url } = await apiRequest<{ url: string; expires_in: number }>(
           "POST",
@@ -131,27 +113,9 @@ export function useVoice(sessionId: string, enabled: boolean, onEnded: () => voi
         player = new Player();
         player.onIdle = () => setStatus((s) => (s === "speaking" ? "listening" : s));
         await player.resume();
-        captureCtx = new AudioContext();
-        const moduleUrl = workletUrl();
-        await captureCtx.audioWorklet.addModule(moduleUrl);
-        URL.revokeObjectURL(moduleUrl);
-        const node = new AudioWorkletNode(captureCtx, "mia-capture");
-        captureCtx.createMediaStreamSource(stream).connect(node);
-        const rate = captureCtx.sampleRate;
-        node.port.onmessage = (e: MessageEvent<Float32Array>) => {
-          if (ws?.readyState !== WebSocket.OPEN) return;
-          const pcm = floatTo16(downsample(e.data, rate, INPUT_RATE));
-          const bytes = new Uint8Array(pcm.buffer);
-          for (const chunk of chunkBytes(bytes)) {
-            send({ type: "audio.chunk", payload: { data: bytesToBase64(chunk) } });
-          }
-        };
         ws = new WebSocket(url);
         wsRef.current = ws;
-        ws.onopen = () => {
-          send({ type: "session.start", payload: { session_id: sessionId } });
-          if (mutedRef.current) send({ type: "audio.mute", payload: { muted: true } });
-        };
+        ws.onopen = () => ws?.send(JSON.stringify({ type: "session.start", payload: { session_id: sessionId } }));
         ws.onmessage = (e) => onMessage(String(e.data));
         ws.onclose = () => {
           if (!cancelled && !endingRef.current) setStatus("failed");
@@ -166,24 +130,77 @@ export function useVoice(sessionId: string, enabled: boolean, onEnded: () => voi
     void run();
     return () => {
       cancelled = true;
-      clearTimeout(interruptTimer);
       wsRef.current = null;
       if (ws) {
         ws.onclose = null;
         ws.close();
       }
-      stream?.getTracks().forEach((t) => t.stop());
-      void captureCtx?.close().catch(() => {});
       player?.close();
+      recorderRef.current?.release();
+      stopPlaybackRef.current?.();
+      clearInterval(tickRef.current);
     };
-  }, [sessionId, enabled, attempt]);
+  }, [sessionId, enabled]);
 
-  const toggleMute = useCallback(() => {
-    const next = !mutedRef.current;
-    mutedRef.current = next;
-    setMuted(next);
+  const startRecording = useCallback(() => {
+    setNotice(null);
+    stopPlaybackRef.current?.();
+    const recorder = new Recorder();
+    recorderRef.current = recorder;
+    recorder
+      .start()
+      .then(() => {
+        setRecord("recording");
+        setRecordedSeconds(0);
+        const started = Date.now();
+        clearInterval(tickRef.current);
+        tickRef.current = setInterval(
+          () => setRecordedSeconds(Math.floor((Date.now() - started) / 1000)),
+          RECORD_TICK_MS,
+        );
+      })
+      .catch(() => {
+        recorder.release();
+        setRecord("denied");
+      });
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    clearInterval(tickRef.current);
+    const pcm = recorderRef.current?.stop() ?? new Int16Array();
+    recorderRef.current = null;
+    recordingRef.current = pcm;
+    setRecordedSeconds(Math.round(pcm.length / 16_000));
+    setRecord("recorded");
+  }, []);
+
+  const play = useCallback(() => {
+    const pcm = recordingRef.current;
+    if (!pcm) return;
+    stopPlaybackRef.current?.();
+    setRecord("playing");
+    stopPlaybackRef.current = playRecording(pcm, () => setRecord("recorded"));
+  }, []);
+
+  const discard = useCallback(() => {
+    stopPlaybackRef.current?.();
+    recordingRef.current = null;
+    setRecordedSeconds(0);
+    setRecord("idle");
+  }, []);
+
+  const send = useCallback(() => {
+    const pcm = recordingRef.current;
     const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "audio.mute", payload: { muted: next } }));
+    if (!pcm || ws?.readyState !== WebSocket.OPEN) return;
+    stopPlaybackRef.current?.();
+    for (const chunk of chunkBytes(new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength))) {
+      ws.send(JSON.stringify({ type: "audio.chunk", payload: { data: bytesToBase64(chunk) } }));
+    }
+    ws.send(JSON.stringify({ type: "answer.submit", payload: {} }));
+    recordingRef.current = null;
+    setRecord("idle");
+    setStatus("thinking");
   }, []);
 
   const end = useCallback(() => {
@@ -197,10 +214,18 @@ export function useVoice(sessionId: string, enabled: boolean, onEnded: () => voi
     return false;
   }, []);
 
-  const retry = useCallback(() => {
-    setError(null);
-    setAttempt((n) => n + 1);
-  }, []);
-
-  return { status, muted, lines, error, toggleMute, end, retry };
+  return {
+    status,
+    record,
+    recordedSeconds,
+    notice,
+    lines,
+    error,
+    startRecording,
+    stopRecording,
+    play,
+    discard,
+    send,
+    end,
+  };
 }

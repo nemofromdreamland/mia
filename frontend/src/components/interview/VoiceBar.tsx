@@ -1,48 +1,38 @@
+import { Mic, Play, Send, Square, Trash2 } from "lucide-react";
 import { MiaMark, type MiaState } from "@/components/MiaMark";
 import { InlineNotice } from "@/components/InlineNotice";
 import { Button } from "@/components/ui/button";
-import type { VoiceStatus } from "@/voice/useVoice";
-import { MicButton } from "./MicButton";
+import type { RecordState, VoiceStatus } from "@/voice/useVoice";
 
 type VoiceBarProps = {
   status: VoiceStatus;
-  muted: boolean;
-  onToggleMute: () => void;
+  record: RecordState;
+  seconds: number;
+  notice: string | null;
+  onRecord: () => void;
+  onStop: () => void;
+  onPlay: () => void;
+  onDiscard: () => void;
+  onSend: () => void;
   onTextFallback: () => void;
-  onRetry: () => void;
 };
 
 const STATUS: Record<VoiceStatus, { mark: MiaState; text: string }> = {
-  mic: { mark: "idle", text: "Permita o acesso ao microfone para começar." },
-  denied: { mark: "idle", text: "" },
   connecting: { mark: "thinking", text: "Conectando…" },
-  speaking: { mark: "speaking", text: "MIA está falando. Você pode interromper falando por cima." },
-  listening: { mark: "listening", text: "Sua vez. Pode falar." },
-  interrupted: { mark: "listening", text: "Pode continuar." },
+  speaking: { mark: "speaking", text: "MIA está falando." },
+  listening: { mark: "listening", text: "Sua vez. Grave sua resposta." },
   thinking: { mark: "thinking", text: "MIA está pensando…" },
   failed: { mark: "idle", text: "" },
   ended: { mark: "idle", text: "" },
 };
 
-/** Design section 8: replaces the AnswerComposer in voice mode (96 px bar). */
-export function VoiceBar({ status, muted, onToggleMute, onTextFallback, onRetry }: VoiceBarProps) {
-  if (status === "denied") {
-    return (
-      <InlineNotice variant="danger">
-        <p>
-          O microfone está bloqueado. Libere o acesso nas configurações do navegador ou continue por texto.
-        </p>
-        <div className="mt-2 flex gap-4">
-          <Button variant="link" size="sm" className="h-auto p-0" onClick={onTextFallback}>
-            Continuar em texto
-          </Button>
-          <Button variant="link" size="sm" className="h-auto p-0" onClick={onRetry}>
-            Tentar de novo
-          </Button>
-        </div>
-      </InlineNotice>
-    );
-  }
+function clock(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+/** Spec 5.6: voice answers are recorded like an audio message (record, listen, delete, send). */
+export function VoiceBar(props: VoiceBarProps) {
+  const { status, record, notice, onTextFallback } = props;
   if (status === "failed") {
     return (
       <InlineNotice variant="neutral" action={{ label: "Continuar em texto", onClick: onTextFallback }}>
@@ -50,24 +40,76 @@ export function VoiceBar({ status, muted, onToggleMute, onTextFallback, onRetry 
       </InlineNotice>
     );
   }
-  const live = status !== "mic" && status !== "connecting" && status !== "ended";
-  const showMuted = muted && live && status !== "speaking";
-  const { mark, text } = showMuted ? { mark: "idle" as const, text: "Microfone silenciado." } : STATUS[status];
+  if (record === "denied") {
+    return (
+      <InlineNotice variant="danger">
+        <p>O microfone está bloqueado. Libere o acesso nas configurações do navegador ou continue por texto.</p>
+        <div className="mt-2 flex gap-4">
+          <Button variant="link" size="sm" className="h-auto p-0" onClick={onTextFallback}>
+            Continuar em texto
+          </Button>
+          <Button variant="link" size="sm" className="h-auto p-0" onClick={props.onRecord}>
+            Tentar de novo
+          </Button>
+        </div>
+      </InlineNotice>
+    );
+  }
+  const recording = record === "recording";
+  const { mark, text } = recording ? { mark: "listening" as const, text: "Gravando…" } : STATUS[status];
   return (
-    <div
-      data-testid="voice-bar"
-      className="flex flex-col items-center gap-3 md:h-[96px] md:flex-row md:justify-between"
-    >
-      <MiaMark state={mark} size={96} className="md:hidden" />
-      <div className="flex w-full items-center justify-between gap-4">
+    <div data-testid="voice-bar" className="flex flex-col gap-3">
+      {notice && <InlineNotice variant="warning">{notice}</InlineNotice>}
+      <div className="flex min-h-[64px] flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <MiaMark state={mark} size={64} className="hidden md:block" />
+          <MiaMark state={mark} size={48} />
           <p role="status" className="text-body">
             {text}
           </p>
         </div>
-        <MicButton muted={muted} disabled={!live} onToggle={onToggleMute} />
+        <RecordControls {...props} />
       </div>
     </div>
+  );
+}
+
+function RecordControls({ status, record, seconds, onRecord, onStop, onPlay, onDiscard, onSend }: VoiceBarProps) {
+  if (record === "recording") {
+    return (
+      <div className="flex items-center gap-3">
+        <span className="font-mono tabular-nums text-danger" aria-live="off">
+          ● {clock(seconds)}
+        </span>
+        <Button onClick={onStop} data-testid="record-stop">
+          <Square aria-hidden="true" />
+          Parar
+        </Button>
+      </div>
+    );
+  }
+  if (record === "recorded" || record === "playing") {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono tabular-nums text-muted-foreground">{clock(seconds)}</span>
+        <Button variant="outline" onClick={onPlay} disabled={record === "playing"} data-testid="record-play">
+          <Play aria-hidden="true" />
+          {record === "playing" ? "Tocando…" : "Ouvir"}
+        </Button>
+        <Button variant="outline" onClick={onDiscard} data-testid="record-discard">
+          <Trash2 aria-hidden="true" />
+          Apagar
+        </Button>
+        <Button onClick={onSend} disabled={status !== "listening"} data-testid="record-send">
+          <Send aria-hidden="true" />
+          Enviar
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <Button onClick={onRecord} disabled={status !== "listening"} data-testid="record-start">
+      <Mic aria-hidden="true" />
+      Gravar resposta
+    </Button>
   );
 }

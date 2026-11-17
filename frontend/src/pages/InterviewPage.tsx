@@ -343,10 +343,15 @@ function Interview({ id, view, reload }: InterviewProps) {
         <Footer>
           <VoiceBar
             status={voice.status}
-            muted={voice.muted}
-            onToggleMute={voice.toggleMute}
+            record={voice.record}
+            seconds={voice.recordedSeconds}
+            notice={voice.notice}
+            onRecord={voice.startRecording}
+            onStop={voice.stopRecording}
+            onPlay={voice.play}
+            onDiscard={voice.discard}
+            onSend={voice.send}
             onTextFallback={() => switchToText(id)}
-            onRetry={voice.retry}
           />
         </Footer>
       ) : (

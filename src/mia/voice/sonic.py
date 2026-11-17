@@ -36,6 +36,9 @@ QUIET_S = 1.2
 SUBMIT_TIMEOUT_S = 8.0
 SILENCE_CHUNK = bytes(3200)  # 100 ms of PCM 16 kHz mono
 KEEPALIVE_S = 0.1
+# The browser sends a whole recording at once; Sonic gets it at ~5x real time (validated on the
+# real model: 4096-byte chunk = 128 ms of audio).
+CLIENT_CHUNK_PAUSE_S = 0.025
 EMPTY_MESSAGE = "Não entendi o áudio. Grave de novo."
 ENDED_PAYLOAD = {"status": "scoring"}
 
@@ -307,6 +310,7 @@ class VoiceSession:
         self._client_audio_at = time.monotonic()
         self._muted_output = True
         await self.send_audio(pcm)
+        await asyncio.sleep(CLIENT_CHUNK_PAUSE_S)
 
     async def keepalive(self) -> None:
         """Sonic expects a continuous audio stream: send silence while the visitor is not

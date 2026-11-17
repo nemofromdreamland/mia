@@ -4,6 +4,7 @@ import { VoiceBar } from "@/components/interview/VoiceBar";
 import { mockApi } from "@/test/api";
 import { makeView } from "@/test/data";
 import { renderInterview } from "@/test/interview";
+import { NOT_UNDERSTOOD } from "./useVoice";
 import { MAX_CHUNK_BYTES, base64ToInt16, bytesToBase64, chunkBytes, downsample, floatTo16 } from "./pcm";
 
 describe("pcm", () => {
@@ -26,50 +27,80 @@ describe("pcm", () => {
   });
 });
 
-describe("VoiceBar (design section 8)", () => {
+describe("VoiceBar (spec 5.6: recorded answers)", () => {
   const noop = () => {};
-  const bar = (status: Parameters<typeof VoiceBar>[0]["status"], muted = false, onToggleMute = noop) =>
-    render(
-      <VoiceBar status={status} muted={muted} onToggleMute={onToggleMute} onTextFallback={noop} onRetry={noop} />,
-    );
+  type Props = Parameters<typeof VoiceBar>[0];
+  const bar = (over: Partial<Props> = {}) => {
+    const props: Props = {
+      status: "listening",
+      record: "idle",
+      seconds: 0,
+      notice: null,
+      onRecord: vi.fn(),
+      onStop: vi.fn(),
+      onPlay: vi.fn(),
+      onDiscard: vi.fn(),
+      onSend: vi.fn(),
+      onTextFallback: noop,
+      ...over,
+    };
+    render(<VoiceBar {...props} />);
+    return props;
+  };
 
   it.each([
-    ["mic", "Permita o acesso ao microfone para começar."],
     ["connecting", "Conectando…"],
-    ["speaking", "MIA está falando. Você pode interromper falando por cima."],
-    ["listening", "Sua vez. Pode falar."],
-    ["interrupted", "Pode continuar."],
+    ["speaking", "MIA está falando."],
+    ["listening", "Sua vez. Grave sua resposta."],
     ["thinking", "MIA está pensando…"],
-  ] as const)("%s shows the design status text", (status, text) => {
-    bar(status);
+  ] as const)("%s shows its status", (status, text) => {
+    bar({ status });
     expect(screen.getByRole("status")).toHaveTextContent(text);
   });
 
-  it("mic button is unavailable while connecting", () => {
-    bar("connecting");
-    const button = screen.getByRole("button", { name: "Microfone indisponível" });
-    expect(button).toHaveAttribute("aria-disabled", "true");
+  it("starts with the microphone closed: only 'Gravar resposta', enabled on your turn", async () => {
+    const props = bar();
+    await userEvent.click(screen.getByTestId("record-start"));
+    expect(props.onRecord).toHaveBeenCalled();
   });
 
-  it("toggles mute with aria-pressed and the muted status", async () => {
-    const toggle = vi.fn();
-    const { rerender } = bar("listening", false, toggle);
-    await userEvent.click(screen.getByRole("button", { name: "Silenciar microfone" }));
-    expect(toggle).toHaveBeenCalled();
-    rerender(<VoiceBar status="listening" muted onToggleMute={toggle} onTextFallback={noop} onRetry={noop} />);
-    expect(screen.getByRole("button", { name: "Ativar microfone" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("status")).toHaveTextContent("Microfone silenciado.");
+  it.each(["speaking", "thinking", "connecting"] as const)("cannot record while %s", (status) => {
+    bar({ status });
+    expect(screen.getByTestId("record-start")).toBeDisabled();
+  });
+
+  it("recording shows the timer and Parar", async () => {
+    const props = bar({ record: "recording", seconds: 72 });
+    expect(screen.getByRole("status")).toHaveTextContent("Gravando…");
+    expect(screen.getByText(/1:12/)).toBeInTheDocument();
+    await userEvent.click(screen.getByTestId("record-stop"));
+    expect(props.onStop).toHaveBeenCalled();
+  });
+
+  it("recorded answer can be heard, deleted or sent", async () => {
+    const props = bar({ record: "recorded", seconds: 9 });
+    await userEvent.click(screen.getByTestId("record-play"));
+    await userEvent.click(screen.getByTestId("record-discard"));
+    await userEvent.click(screen.getByTestId("record-send"));
+    expect(props.onPlay).toHaveBeenCalled();
+    expect(props.onDiscard).toHaveBeenCalled();
+    expect(props.onSend).toHaveBeenCalled();
+  });
+
+  it("shows the not-understood notice", () => {
+    bar({ notice: NOT_UNDERSTOOD });
+    expect(screen.getByRole("alert")).toHaveTextContent("Não entendi o áudio. Grave de novo.");
   });
 
   it("denied mic offers text and retry", () => {
-    bar("denied");
+    bar({ record: "denied" });
     expect(screen.getByRole("alert")).toHaveTextContent("O microfone está bloqueado.");
     expect(screen.getByRole("button", { name: "Continuar em texto" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tentar de novo" })).toBeInTheDocument();
   });
 
   it("failed connection offers continuing by text", () => {
-    bar("failed");
+    bar({ status: "failed" });
     expect(screen.getByRole("note")).toHaveTextContent("Não foi possível reconectar.");
   });
 });
@@ -77,29 +108,28 @@ describe("VoiceBar (design section 8)", () => {
 describe("InterviewPage in voice mode", () => {
   beforeEach(() => sessionStorage.clear());
 
-  it("replaces the composer with the VoiceBar and shows the denied notice", async () => {
-    Object.defineProperty(navigator, "mediaDevices", {
-      configurable: true,
-      value: { getUserMedia: vi.fn().mockRejectedValue(new Error("NotAllowed")) },
-    });
-    const view = makeView(
+  const voiceView = () =>
+    makeView(
       { turns: [], screening: null },
       { status: "in_progress", mode: "voice", started_at: new Date().toISOString() },
     );
-    const { calls } = mockApi({ "GET /sessions/s1": view });
+
+  it("never asks for the microphone on open, and shows the VoiceBar", async () => {
+    const getUserMedia = vi.fn();
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia } });
+    mockApi({
+      "GET /sessions/s1": voiceView(),
+      "POST /sessions/s1/voice-url": () => new Promise<Response>(() => {}),
+    });
     renderInterview();
-    expect(await screen.findByText(/O microfone está bloqueado/)).toBeInTheDocument();
+    expect(await screen.findByTestId("voice-bar")).toBeInTheDocument();
     expect(screen.queryByTestId("answer-input")).not.toBeInTheDocument();
-    expect(calls.some((c) => c.path.includes("voice-url"))).toBe(false);
+    expect(getUserMedia).not.toHaveBeenCalled();
   });
 
   it("uses the text composer after the tab chose text", async () => {
     sessionStorage.setItem("mia:voice-fallback:s1", "1");
-    const view = makeView(
-      { turns: [], screening: null },
-      { status: "in_progress", mode: "voice", started_at: new Date().toISOString() },
-    );
-    mockApi({ "GET /sessions/s1": view });
+    mockApi({ "GET /sessions/s1": voiceView() });
     renderInterview();
     await waitFor(() => expect(screen.getByTestId("answer-input")).toBeInTheDocument());
     expect(screen.queryByTestId("voice-bar")).not.toBeInTheDocument();
