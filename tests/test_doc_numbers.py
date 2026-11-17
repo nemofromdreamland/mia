@@ -105,3 +105,5 @@ def test_main_prints_table(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -
     out = capsys.readouterr().out
     assert "judge v2 kappa (test)" in out
     assert "0.82" in out
+    assert "judge v1 within ±1 (test) | 76.2%" in out
+    assert "robustness attack types | 5" in out

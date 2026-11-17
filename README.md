@@ -32,7 +32,7 @@ Full walkthrough (1:36): <a href="media/demo-desktop.mp4">desktop</a> · <a href
 | Judge scores within ±1 of the human (test) | **76% → 100%** | [evaluation](docs/evaluation.md) |
 | Score inflation on rambling answers | **+1.40 → +0.30** points | [evaluation](docs/evaluation.md) |
 | Prompt-injection attacks that worked (30 attacks, 5 types) | **0%** | [security](docs/security.md) |
-| Text cost per completed interview in production | **US$ 0.059** (upper bound) | [costs](docs/costs.md) |
+| Text cost per completed interview in production | **US$ 0.0587** (upper bound) | [costs](docs/costs.md) |
 | Voice: time to first audio, median / p90 | **1.31 s / 1.49 s** (11 sessions) | [production summary](results/production_summary.md) |
 | Production model calls with errors | **0 of 456** | [production summary](results/production_summary.md) |
 
@@ -98,7 +98,7 @@ data before anything is published. Threat model: [security](docs/security.md).
 
 ```bash
 uv sync
-uv run pytest                                   # 1,400+ tests, no model calls
+uv run pytest                                   # full suite, no model calls
 uv run mia simulate --case prompt-engineer-jr   # needs Bedrock access
 ```
 

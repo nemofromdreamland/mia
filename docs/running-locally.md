@@ -22,7 +22,7 @@ cp .env.example .env      # set AWS_PROFILE and AWS_REGION (and GROQ_API_KEY if 
 ## 1. Tests (no model, no keys)
 
 ```bash
-uv run pytest             # 1,400+ tests, fakes only, coverage gate 80%
+uv run pytest             # full suite, fakes only, coverage gate configured in pyproject.toml
 uv run ruff check .
 cd frontend && npm ci && npm test
 ```

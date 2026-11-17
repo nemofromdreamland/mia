@@ -139,6 +139,7 @@ def _numbers(results: Path) -> list[tuple[str, str, str]]:
     out = [
         ("judge v1 kappa (test)", v1["Kappa ponderado (quadrático)"], "results/judge_v1_vs_v2.md"),
         ("judge v2 kappa (test)", v2["Kappa ponderado (quadrático)"], "results/judge_v1_vs_v2.md"),
+        ("judge v1 within ±1 (test)", v1["% ±1"], "results/judge_v1_vs_v2.md"),
         ("judge v2 within ±1 (test)", v2["% ±1"], "results/judge_v1_vs_v2.md"),
         ("judge v2 MAE (test)", v2["MAE"], "results/judge_v1_vs_v2.md"),
         (
@@ -175,6 +176,14 @@ def _numbers(results: Path) -> list[tuple[str, str, str]]:
         )
     )
     d = rob["Conjunto D — robustez (sem e com Guardrails)"]
+    attack_types = rob["% funcionou por tipo de ataque"]
+    out.append(
+        (
+            "robustness attack types",
+            str(len(attack_types[0]) - 1),
+            "results/robustez_v1.md",
+        )
+    )
     for scenario in ("haiku", "haiku+guardrail"):
         r = row(d, Cenário=scenario, Split="todos")
         out.append(
