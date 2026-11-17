@@ -17,6 +17,11 @@ export default defineConfig({
     {
       command: "uv run uvicorn mia.api.dev:app --port 8000",
       cwd: "..",
+      // Bedrock credentials come from the AWS CLI profile (AGENTS.md), never from .env.
+      env: {
+        AWS_PROFILE: process.env.AWS_PROFILE ?? "mia",
+        AWS_REGION: process.env.AWS_REGION ?? "us-east-1",
+      },
       url: "http://127.0.0.1:8000/ping",
       reuseExistingServer: true,
       timeout: 120_000,
