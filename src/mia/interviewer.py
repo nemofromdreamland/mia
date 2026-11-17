@@ -5,6 +5,7 @@ comes next); the LLM only suggests whether to dig deeper and writes the speech.
 External decisions (LLM, judge, clock) are injected as callables.
 """
 
+import re
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Literal
@@ -195,8 +196,8 @@ def should_follow_up(
 
 
 def default_writer(*, persona: Persona, **llm_options: Any) -> Writer:
-    """Writer backed by the interviewer prompt v1; the code supplies phase and question."""
-    prompt = load_prompt("interviewer", 1)
+    """Writer backed by the interviewer prompt v2; the code supplies phase and question."""
+    prompt = load_prompt("interviewer", 2)
 
     def write(phase: Phase, question: str, instruction: str, history: list[Turn]) -> str:
         variables = {
@@ -206,9 +207,24 @@ def default_writer(*, persona: Persona, **llm_options: Any) -> Writer:
             "instruction": instruction,
             "history": _history_text(history),
         }
-        return run_prompt(prompt, variables, **llm_options).strip()
+        return finish_at_sentence(run_prompt(prompt, variables, **llm_options))
 
     return write
+
+
+SENTENCE_END = re.compile(r"[.?!…]")
+
+
+def finish_at_sentence(text: str) -> str:
+    """Never show a line cut by max_tokens: drop the unfinished tail after the last sentence end.
+
+    A text with no sentence end at all is returned as it came (spec 4.7c, R2).
+    """
+    text = text.strip()
+    ends = [match.end() for match in SENTENCE_END.finditer(text)]
+    if not ends or ends[-1] == len(text):
+        return text
+    return text[: ends[-1]]
 
 
 def score_answer(scorer: Scorer, question: Question, answer: str) -> AnswerScore | None:
