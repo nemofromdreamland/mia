@@ -1,0 +1,26 @@
+# Secrets never enter the build context.
+.env
+.env.*
+*.pem
+*.key
+
+# Dev-only and generated files.
+.venv
+.git
+runs
+results
+frontend
+tests
+evals
+experiments
+specs
+docs
+scripts
+infra
+node_modules
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+relatorio.json
