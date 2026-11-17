@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { apiErr, json, mockApi } from "@/test/api";
 import { CASES } from "@/test/data";
@@ -22,7 +22,7 @@ describe("CandidatePage", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: "Explica decisões com números, mas não cita limitações." }),
     ).toBeInTheDocument();
-    expect(document.title).toBe("Candidato 7 · MIA");
+    await waitFor(() => expect(document.title).toBe("Candidato 7 · MIA"));
     expect(screen.getByRole("link", { name: /Candidatos/ })).toHaveAttribute("href", "/recrutador");
     expect(screen.getByText("Candidato 7 · Engenheiro(a) de Prompt Jr")).toHaveClass("label");
     expect(screen.getByText("Entrevista técnica · 15 de novembro de 2026 · 18 min")).toBeInTheDocument();
