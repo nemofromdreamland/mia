@@ -99,6 +99,10 @@ export function useVoice(sessionId: string, enabled: boolean, onEnded: () => voi
         case "turn.saved":
           setTurnsSaved((n) => n + 1);
           break;
+        case "state":
+          // The voice did not come: the line is shown as text and it is the visitor's turn.
+          if (p.voice_fallback) setStatus("listening");
+          break;
         case "session.ended":
           endingRef.current = true;
           setStatus("ended");

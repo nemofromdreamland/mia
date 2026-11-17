@@ -39,6 +39,10 @@ KEEPALIVE_S = 0.1
 # The browser sends a whole recording at once; Sonic gets it at ~5x real time (validated on the
 # real model: 4096-byte chunk = 128 ms of audio).
 CLIENT_CHUNK_PAUSE_S = 0.025
+# Sonic sometimes ignores the "(resposta enviada)" marker (seen in production): resend it, and
+# if it still does not fetch the line, show the line as text so the interview never stalls.
+SPOKEN_WAIT_S = 4.0
+SPEAK_RETRIES = 2
 EMPTY_MESSAGE = "Não entendi o áudio. Grave de novo."
 ENDED_PAYLOAD = {"status": "scoring"}
 
@@ -149,6 +153,7 @@ class VoiceSession:
         self._muted_output = False  # drop Sonic output the code did not ask for
         self._client_audio_at = 0.0
         self._next_say: str | None = None
+        self._spoken = asyncio.Event()
         self._tool: dict[str, Any] | None = None
         self._ending = False
         self._initial_state: dict[str, Any] = {}
@@ -262,7 +267,21 @@ class VoiceSession:
     async def speak(self, text: str) -> None:
         """Make Sonic read `text`: it fetches it with next_line (see the module docstring)."""
         self._next_say = text
+        self._spoken.clear()
         await self._send_text("USER", SUBMITTED_TEXT, interactive=True)
+
+    async def _speak_reliably(self, text: str) -> bool:
+        """speak() + resend the marker while Sonic has not fetched the line. False = gave up."""
+        await self.speak(text)
+        for attempt in range(SPEAK_RETRIES + 1):
+            try:
+                await asyncio.wait_for(self._spoken.wait(), SPOKEN_WAIT_S)
+                return True
+            except TimeoutError:
+                if attempt < SPEAK_RETRIES:
+                    await self._send_text("USER", SUBMITTED_TEXT, interactive=True)
+        self._next_say = None
+        return False
 
     async def _send_tool_result(self, tool_use_id: str, result: dict[str, Any]) -> None:
         name = str(uuid.uuid4())
@@ -303,6 +322,7 @@ class VoiceSession:
             await self._send_tool_result(tool.get("toolUseId", ""), {"say": ""})
             return
         self._muted_output = False  # from here on, Sonic speaks the line the code chose
+        self._spoken.set()
         await self._send_tool_result(tool.get("toolUseId", ""), {"say": say})
 
     async def send_client_audio(self, pcm: bytes) -> None:
@@ -339,8 +359,16 @@ class VoiceSession:
             reply = await asyncio.to_thread(self.brain.answer, text)
         except ServiceError as exc:
             return [_error(exc)]
-        await self.speak(reply.say)
+        spoken = await self._speak_reliably(reply.say)
         events = [ServerEvent(type="turn.saved", payload={"turn_no": reply.turn_no})]
+        if not spoken:  # fallback: the line goes to the screen; the visitor can answer
+            self.transcript.append({"role": "interviewer", "text": reply.say})
+            events.append(_transcript("interviewer", reply.say, final=True))
+            events.append(ServerEvent(type="state", payload={"voice_fallback": True}))
+            if reply.ended:
+                self.ended = True
+                events.append(ServerEvent(type="session.ended", payload=ENDED_PAYLOAD))
+                return events
         if reply.ended:
             self._ending = True
         elif reply.state:

@@ -119,6 +119,7 @@ def fast_submit(monkeypatch) -> None:
     monkeypatch.setattr("mia.voice.sonic.TRAILING_SILENCE_S", 0.2)
     monkeypatch.setattr("mia.voice.sonic.QUIET_S", 0.05)
     monkeypatch.setattr("mia.voice.sonic.SUBMIT_TIMEOUT_S", 0.3)
+    monkeypatch.setattr("mia.voice.sonic.SPOKEN_WAIT_S", 0.05)
 
 
 def test_voice_config_defaults_to_carolina_and_env_overrides() -> None:
@@ -159,18 +160,46 @@ def test_submit_uses_transcript_saves_and_speaks_next_line(tmp_path) -> None:
     brain = FakeBrain()
     session = make([], brain, tmp_path)
 
+    async def sonic_fetches_line() -> None:
+        while session._next_say is None:
+            await asyncio.sleep(0.01)
+        for event in tool_use():
+            await session._handle(event)
+
     async def go() -> list:
         await session.start()
-        await session.send_client_audio(b"\x01\x02")
+        session._next_say = None  # opening already read
+        await session.send_client_audio(b"")
         await hear(session, "Eu fiz um projeto.")
         await hear(session, " Com Python.")
-        return await session.submit()
+        fetch = asyncio.create_task(sonic_fetches_line())
+        events = await session.submit()
+        await fetch
+        return events
 
     events = asyncio.run(go())
     assert brain.answers == ["Eu fiz um projeto. Com Python."]
     assert [e.type for e in events] == ["turn.saved", "state"]
     assert user_texts(session)[-1] == "(resposta enviada)"
-    assert session._next_say == "Próxima pergunta."
+    assert tool_results(session)[-1] == {"say": "Próxima pergunta."}
+
+
+def test_submit_retries_marker_then_falls_back_to_text(tmp_path) -> None:
+    brain = FakeBrain()
+    session = make([], brain, tmp_path)
+
+    async def go() -> list:
+        await session.start()
+        await hear(session, "Resposta.")
+        return await session.submit()
+
+    events = asyncio.run(go())
+    markers = [t for t in user_texts(session) if t == "(resposta enviada)"]
+    assert len(markers) == 1 + 3  # opening + first try + 2 retries
+    assert [e.type for e in events] == ["turn.saved", "transcript", "state", "state"]
+    assert events[1].payload == {"role": "interviewer", "text": "Próxima pergunta.", "final": True}
+    assert events[2].payload == {"voice_fallback": True}
+    assert session._next_say is None
 
 
 def test_submit_without_transcript_is_invalid_input_and_saves_nothing(tmp_path) -> None:
@@ -255,6 +284,8 @@ def test_ended_interview_emits_session_ended_after_farewell_audio(tmp_path) -> N
     async def go() -> list:
         await session.start()
         await hear(session, "tchau")
+        session._spoken.set()  # Sonic fetched the farewell
+        session._spoken.clear = lambda: None  # keep it set during submit
         await session.submit()
         out: list = []
         for event in [
