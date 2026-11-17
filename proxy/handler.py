@@ -35,6 +35,7 @@ ROUTES: list[tuple[str, re.Pattern[str], str]] = [
         ("GET", "/recruiter/candidates", "list_recruiter_candidates"),
         ("GET", f"/recruiter/candidates/{SESSION}", "get_recruiter_candidate"),
         ("POST", f"/sessions/{SESSION}/voice-url", "voice_url"),
+        ("GET", f"/sessions/{SESSION}/examples", "get_examples"),
     )
 ]
 # Same set as NO_VISITOR in src/mia/api/invocations.py: the visitor is validated, not forwarded.

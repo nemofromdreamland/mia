@@ -12,7 +12,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict
 
-from mia.cases import CaseError, CaseNotFoundError, load_case
+from mia.cases import CaseError, CaseNotFoundError, load_case, load_examples
 from mia.cases import list_cases as load_cases
 from mia.interviewer import (
     DEFAULT_LIMITS,
@@ -49,6 +49,7 @@ from mia.schemas import (
     AnswerResult,
     CaseStats,
     CaseSummary,
+    ExamplesView,
     InterviewPlan,
     Mode,
     Persona,
@@ -402,6 +403,27 @@ def authorize_voice(deps: ServiceDeps, visitor_id: str, session_id: str) -> None
         raise ServiceError("demo_paused", DEMO_PAUSED_MESSAGE)
 
 
+def get_examples(deps: ServiceDeps, visitor_id: str, session_id: str) -> ExamplesView:
+    """Strong/weak example for the current question (spec 5.6). Marks `examples_seen`, which is
+    shown as a neutral note and never changes the score."""
+    with _session_lookup():
+        session = deps.repo.get_session(visitor_id, session_id)
+    if session.status != "in_progress" or session.current_question_id is None:
+        raise ServiceError("invalid_state", "A entrevista não está em andamento.")
+    try:
+        examples = load_examples(session.case_id or "", deps.cases_dir)
+    except CaseError as exc:
+        raise ServiceError("not_found", "Sem exemplos para este caso.") from exc
+    found = next(
+        (e for e in examples.examples if e.question_id == session.current_question_id), None
+    )
+    if found is None:
+        raise ServiceError("not_found", "Sem exemplos para esta pergunta.")
+    if not session.examples_seen:
+        _update(deps, session, "in_progress", {"examples_seen": True})
+    return ExamplesView(question_id=found.question_id, strong=found.strong, weak=found.weak)
+
+
 def get_report(deps: ServiceDeps, visitor_id: str, session_id: str) -> ReportView:
     with _session_lookup():
         session = deps.repo.get_session(visitor_id, session_id)
@@ -411,7 +433,12 @@ def get_report(deps: ServiceDeps, visitor_id: str, session_id: str) -> ReportVie
     turns = deps.repo.list_turns(visitor_id, session_id)
     completed = deps.repo.list_completed(session.case_id) if session.case_id else []
     above = is_above_average(session.overall_score, case_average(completed))
-    return ReportView(report=report, turns=turns, is_above_case_avg=above)
+    return ReportView(
+        report=report,
+        turns=turns,
+        is_above_case_avg=above,
+        examples_seen=session.examples_seen,
+    )
 
 
 def list_recruiter_candidates(deps: ServiceDeps, case_id: str | None = None) -> RecruiterList:
@@ -435,5 +462,9 @@ def get_recruiter_candidate(deps: ServiceDeps, session_id: str) -> RecruiterCand
         report, summary = deps.reports.load(session_id)
         turns = deps.repo.list_turns(session.visitor_id, session_id)
     return RecruiterCandidate(
-        row=build_row(session, case_average(same_case)), summary=summary, report=report, turns=turns
+        row=build_row(session, case_average(same_case)),
+        summary=summary,
+        report=report,
+        turns=turns,
+        examples_seen=session.examples_seen,
     )

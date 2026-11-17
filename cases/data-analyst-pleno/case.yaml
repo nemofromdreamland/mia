@@ -7,4 +7,4 @@ language: pt-BR
 blurb: "E-commerce em crescimento procura quem transforme dados de produto em decisões com SQL, métricas e testes A/B."
 candidate_blurb: "Você é Bruno, analista de dados há 3 anos, forte em SQL e dashboards de vendas."
 estimated_minutes: 6
-version: 2               # sobe quando cv, vaga ou plano mudam
+version: 3               # sobe quando cv, vaga ou plano mudam

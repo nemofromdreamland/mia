@@ -204,6 +204,7 @@ class Session(BaseModel):
     updated_at: datetime
     started_at: datetime | None = None
     ended_at: datetime | None = None
+    examples_seen: bool = False  # spec 5.6: neutral mark, never changes the score
 
 
 # ---------- Service responses ----------
@@ -227,6 +228,7 @@ class ReportView(BaseModel):
     report: Report
     turns: list[Turn]
     is_above_case_avg: bool | None  # None without an average (< 3 completed sessions)
+    examples_seen: bool = False  # spec 5.6: neutral note only
 
 
 class RecruiterList(BaseModel):
@@ -239,6 +241,7 @@ class RecruiterCandidate(BaseModel):
     summary: CandidateSummary
     report: Report
     turns: list[Turn]
+    examples_seen: bool = False  # spec 5.6: neutral note only, never a decision input
 
 
 # ---------- Evaluation ----------
@@ -492,3 +495,34 @@ class VoiceUrl(BaseModel):
 
     url: str
     expires_in: int = 300
+
+
+# ---------- Answer examples (spec 5.6) ----------
+
+
+class AnswerExample(BaseModel):
+    """Example answers for one plan question: a strong and a weak one, generated beforehand."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question_id: str
+    strong: str = Field(min_length=1)
+    weak: str = Field(min_length=1)
+
+
+class CaseExamples(BaseModel):
+    """cases/<id>/examples.json."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    case_id: str
+    generated_by: str  # "<prompt>@v<N> <model>"
+    examples: list[AnswerExample]
+
+
+class ExamplesView(BaseModel):
+    """GET /sessions/{id}/examples: examples for the current question only."""
+
+    question_id: str
+    strong: str
+    weak: str

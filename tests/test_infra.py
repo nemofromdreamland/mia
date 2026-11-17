@@ -272,7 +272,7 @@ def test_routes_match_the_proxy() -> None:
     declared = set(re.findall(r'"((?:GET|POST|DELETE) /[^"]*)"', read_infra()))
     assert "for_each" in block
     assert declared == handler_route_keys()
-    assert len(declared) == 12  # 11 REST routes + voice-url (spec 5)
+    assert len(declared) == 13  # 11 REST + voice-url (5) + examples (5.6)
 
 
 def test_integration_is_lambda_payload_2() -> None:

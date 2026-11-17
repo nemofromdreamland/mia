@@ -1,0 +1,21 @@
+{
+  "case_id": "data-analyst-pleno",
+  "generated_by": "synthetic_candidate@v4 groq:openai/gpt-oss-120b",
+  "examples": [
+    {
+      "question_id": "q1",
+      "strong": "Recentemente, apresentei à diretoria de marketing o dashboard de devoluções que criei no Metabase. Primeiro, converti a métrica em um gráfico de barras com cores intuitivas e expliquei a taxa de devolução como “percentual de pedidos que retornam”. Usei analogias do dia a dia (“é como a taxa de reclamação de um restaurante”). O insight mostrou que 12 % das devoluções vinham de descrições confusas, levando à reescrita de 200 anúncios e à redução da taxa para 8 % em um mês.",
+      "weak": "Costumo simplificar a análise, usar gráficos limpos e explicar passo a passo, focando nos indicadores principais e usando analogias simples, garantindo que o público entenda o resultado sem precisar de termos técnicos."
+    },
+    {
+      "question_id": "q3",
+      "strong": "Na Casa Brasa Móveis, escrevi uma query PostgreSQL que, por pedido, calculava a soma acumulada de vendas por categoria nos últimos 30 dias e, usando `ROW_NUMBER()` sobre `PARTITION BY categoria ORDER BY taxa_devolucao DESC`, listava os produtos com maior taxa de devolução. Usei `SUM(valor) OVER (PARTITION BY categoria ORDER BY data ROWS BETWEEN 29 PRECEDING AND CURRENT ROW)`. A solução evitou sub‑queries, reduziu o tempo de execução de 12 min para 45 s e identificou cinco categorias com devolução > 15 %, levando à reformulação de 200 anúncios.",
+      "weak": "Criei uma query que calculava a soma acumulada de vendas por categoria e mês usando SUM() OVER(PARTITION BY categoria ORDER BY data), além de ROW_NUMBER para identificar o top 5 produtos. Usei funções de janela para evitar sub‑queries e garantir desempenho."
+    },
+    {
+      "question_id": "q6",
+      "strong": "Quando recebo três pedidos urgentes, primeiro avalio o impacto no negócio (receita, custo ou experiência do cliente) e o prazo de entrega. Uso uma matriz 2x2 para classificar: alta‑impacto + curto prazo vai primeiro. Por exemplo, numa sexta‑feira tive pedidos de marketing (campanha de Black Friday), produto (teste A/B) e logística (reabastecimento). Priorizei o dashboard de marketing, que aumentou a taxa de conversão em 12%, depois o relatório de logística e, por fim, o teste A/B, comunicando os prazos ao time.",
+      "weak": "Eu avalio o impacto de cada pedido, converso rapidamente com os responsáveis, priorizo quem tem maior urgência para as metas da empresa e organizo meu tempo para atender um pedido de cada vez."
+    }
+  ]
+}

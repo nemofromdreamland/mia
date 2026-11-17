@@ -99,7 +99,7 @@ def test_real_cases_shorten_to_three(case_id: str) -> None:
     loaded = load_case(case_id)
     short = interviewer.shorten_plan(loaded.plan)
     assert len({q.id for q in short.questions}) == 3
-    assert loaded.case.estimated_minutes == 6 and loaded.case.version == 2
+    assert loaded.case.estimated_minutes == 6 and loaded.case.version == 3
 
 
 def test_cli_limits_unchanged() -> None:

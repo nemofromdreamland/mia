@@ -7,4 +7,4 @@ language: pt-BR
 blurb: "Fintech procura quem construa APIs em Python, aprenda rápido e goste de trabalhar em equipe."
 candidate_blurb: "Você é Carla, que trocou a logística pela programação há um ano e já criou APIs em projetos pessoais."
 estimated_minutes: 6
-version: 2               # sobe quando cv, vaga ou plano mudam
+version: 3               # sobe quando cv, vaga ou plano mudam
