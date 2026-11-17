@@ -2,11 +2,11 @@ import type { RouteObject } from "react-router";
 import {
   CandidatePage,
   InterviewPage,
-  PrepPage,
   RecruiterPage,
   ReportPage,
 } from "@/pages/placeholders";
 import { HomePage } from "@/pages/HomePage";
+import { PrepPage } from "@/pages/PrepPage";
 
 export const routes: RouteObject[] = [
   { path: "/", element: <HomePage /> },

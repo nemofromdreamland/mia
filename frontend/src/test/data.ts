@@ -1,4 +1,42 @@
-import type { CaseSummary, Session } from "@/lib/types";
+import type { Case, CaseSummary, Screening, Session, SessionView } from "@/lib/types";
+
+export function makeFullCase(overrides: Partial<Case> = {}): Case {
+  return {
+    case_id: "prompt-engineer-jr",
+    title: "Engenheiro(a) de Prompt Jr",
+    company: "Nexa Consultoria",
+    level: "junior",
+    persona: "technical",
+    language: "pt-BR",
+    blurb: "Vaga para construir prompts e avaliações.",
+    candidate_blurb: "Você é Ana, recém-formada em Sistemas de Informação.",
+    estimated_minutes: 20,
+    version: 1,
+    ...overrides,
+  };
+}
+
+export function makeScreening(overrides: Partial<Screening> = {}): Screening {
+  return {
+    job_title: "Engenheiro(a) de Prompt Jr",
+    fit_score: 72,
+    strengths: [{ point: "Já fez RAG", cv_quote: "chatbot com RAG sobre 3 fontes" }],
+    concerns: [{ point: "Pouca avaliação", cv_quote: "testes manuais" }],
+    missing_keywords: ["LangGraph", "Bedrock"],
+    competencies: ["Engenharia de prompts", "Avaliação de modelos", "Comunicação técnica"],
+    ...overrides,
+  };
+}
+
+export function makeView(overrides: Partial<SessionView> = {}, session: Partial<Session> = {}): SessionView {
+  return {
+    session: makeSession(session),
+    case: makeFullCase(),
+    screening: makeScreening(),
+    turns: null,
+    ...overrides,
+  };
+}
 
 export function makeCase(overrides: Partial<CaseSummary> = {}): CaseSummary {
   return {

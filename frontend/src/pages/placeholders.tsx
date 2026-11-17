@@ -29,10 +29,6 @@ function RecruiterScreen({ title, tab }: ScreenProps) {
   );
 }
 
-export function PrepPage() {
-  return <CandidateScreen title="Preparo" tab="Preparo" />;
-}
-
 export function InterviewPage() {
   useDocumentTitle("Entrevista");
   return (

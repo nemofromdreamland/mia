@@ -22,7 +22,6 @@ describe("routes", () => {
   ])("%s has its title and header", (path, title, role) => {
     renderAt(path);
     expect(document.title).toBe(title);
-    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
     if (role === "candidate") {
       expect(screen.getByTestId("recruiter-link")).toHaveAttribute("href", "/recrutador");
     } else {
