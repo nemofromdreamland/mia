@@ -5,18 +5,6 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 type ScreenProps = { title: string; tab: string };
 
-function CandidateScreen({ title, tab }: ScreenProps) {
-  useDocumentTitle(tab);
-  return (
-    <>
-      <AppHeader role="candidate" />
-      <main className="mx-auto max-w-[1040px] px-4 py-12 md:px-6">
-        <h1 className="text-h1">{title}</h1>
-      </main>
-    </>
-  );
-}
-
 function RecruiterScreen({ title, tab }: ScreenProps) {
   useDocumentTitle(tab);
   return (
@@ -27,10 +15,6 @@ function RecruiterScreen({ title, tab }: ScreenProps) {
       </main>
     </>
   );
-}
-
-export function ReportPage() {
-  return <CandidateScreen title="Relatório" tab="Relatório" />;
 }
 
 export function RecruiterPage() {

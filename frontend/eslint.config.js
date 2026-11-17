@@ -30,4 +30,9 @@ export default tseslint.config(
     files: ['src/components/ui/**/*.tsx'],
     rules: { 'react-refresh/only-export-components': 'off' },
   },
+  {
+    // test helpers export render functions, not components (no fast refresh there)
+    files: ['src/test/**/*.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
 )
