@@ -1,8 +1,14 @@
 """QuotaGate rules: kill switch, then global quota, then visitor quota."""
 
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta, timezone
+from typing import Any
 
+import boto3
 import pytest
+from botocore.exceptions import ClientError
+from dynamo_tables import create_meta_table
+from moto import mock_aws
 
 from mia.quotas import (
     GLOBAL_DAILY_LIMIT,
@@ -13,6 +19,8 @@ from mia.quotas import (
     global_key,
     visitor_key,
 )
+from mia.repo_dynamo import DynamoMetaStore
+from mia.repositories import RepositoryError
 from mia.service import ServiceError, SessionGate
 
 V1 = "3f8b2c1e-7d4a-4f6b-9a2e-1c5d8e9f0a7b"
@@ -129,3 +137,104 @@ def test_store_increment_stops_at_limit_and_decrement_returns_one() -> None:
     assert [store.try_increment("k", SK, 2, EXPIRES) for _ in range(3)] == [True, True, False]
     store.decrement("k", SK)
     assert store.get_count("k", SK) == 1
+
+
+# --- MetaStore contract: the same tests run on memory and on DynamoDB (moto) ---
+
+
+@pytest.fixture
+def meta_table(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    with mock_aws():
+        yield create_meta_table(boto3.resource("dynamodb", region_name="us-east-1"))
+
+
+@pytest.fixture(params=["memory", "dynamo"])
+def store_and_setter(
+    request: pytest.FixtureRequest,
+) -> tuple[MetaStore, Callable[[bool], None]]:
+    if request.param == "memory":
+        memory = InMemoryMetaStore()
+        return memory, memory.set_demo_open
+    table = request.getfixturevalue("meta_table")
+    return DynamoMetaStore(table), lambda value: table.put_item(
+        Item={"pk": "config", "sk": "demo", "open": value}
+    )
+
+
+def test_contract_increment_stops_at_limit_and_decrement_returns_one(
+    store_and_setter: tuple[MetaStore, Callable[[bool], None]],
+) -> None:
+    store, _ = store_and_setter
+    assert [store.try_increment("k", SK, 2, EXPIRES) for _ in range(3)] == [True, True, False]
+    store.decrement("k", SK)
+    assert store.try_increment("k", SK, 2, EXPIRES) is True
+    assert store.try_increment("k", SK, 2, EXPIRES) is False
+
+
+def test_contract_counters_are_independent(
+    store_and_setter: tuple[MetaStore, Callable[[bool], None]],
+) -> None:
+    store, _ = store_and_setter
+    assert store.try_increment("a", SK, 1, EXPIRES)
+    assert store.try_increment("b", SK, 1, EXPIRES)
+    assert store.try_increment("a", "2026-11-17", 1, EXPIRES)
+    assert not store.try_increment("a", SK, 1, EXPIRES)
+
+
+def test_contract_demo_open_by_default_and_follows_config(
+    store_and_setter: tuple[MetaStore, Callable[[bool], None]],
+) -> None:
+    store, set_open = store_and_setter
+    assert store.is_demo_open() is True  # P1: missing config means open
+    set_open(False)
+    assert store.is_demo_open() is False
+    set_open(True)
+    assert store.is_demo_open() is True
+
+
+def test_contract_gate_end_to_end(
+    store_and_setter: tuple[MetaStore, Callable[[bool], None]],
+) -> None:
+    store, set_open = store_and_setter
+    gate = QuotaGate(store, FakeClock())
+    for _ in range(5):
+        gate.check(V1)
+    assert refused_code(gate, V1) == "quota_exceeded"
+    set_open(False)
+    assert refused_code(gate, V2) == "demo_paused"
+
+
+def test_dynamo_increment_writes_count_and_expires_at(meta_table: Any) -> None:
+    DynamoMetaStore(meta_table).try_increment("k", SK, 5, EXPIRES)
+    item = meta_table.get_item(Key={"pk": "k", "sk": SK})["Item"]
+    assert (int(item["count"]), int(item["expires_at"])) == (1, EXPIRES)
+
+
+def test_dynamo_paused_demo_refuses_through_gate(meta_table: Any) -> None:
+    meta_table.put_item(Item={"pk": "config", "sk": "demo", "open": False})
+    gate = QuotaGate(DynamoMetaStore(meta_table), FakeClock())
+    assert refused_code(gate, V1) == "demo_paused"
+    assert "Item" not in meta_table.get_item(Key={"pk": global_key(), "sk": SK})
+
+
+def test_dynamo_missing_table_becomes_repository_error(meta_table: Any) -> None:
+    meta_table.delete()
+    store = DynamoMetaStore(meta_table)
+    with pytest.raises(RepositoryError):
+        store.is_demo_open()
+    with pytest.raises(RepositoryError):
+        store.try_increment("k", SK, 1, EXPIRES)
+    with pytest.raises(RepositoryError):
+        store.decrement("k", SK)
+
+
+def test_dynamo_non_conditional_error_becomes_repository_error() -> None:
+    class Broken:
+        def update_item(self, **kwargs: Any) -> Any:
+            raise ClientError({"Error": {"Code": "ProvisionedThroughputExceeded"}}, "UpdateItem")
+
+    with pytest.raises(RepositoryError):
+        DynamoMetaStore(Broken()).try_increment("k", SK, 1, EXPIRES)

@@ -65,7 +65,7 @@ class ReportStore(Protocol):
 
 @runtime_checkable
 class CandidateCounter(Protocol):
-    """Sequential candidate number per case (atomic counter in `mia-meta` later)."""
+    """Sequential candidate number per case (atomic in `mia-meta` via `DynamoCandidateCounter`)."""
 
     def next(self, case_id: str) -> int: ...
 

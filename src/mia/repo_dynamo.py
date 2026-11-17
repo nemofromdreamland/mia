@@ -1,4 +1,5 @@
-"""DynamoDB implementation of `SessionRepository` (tables `mia-sessions` and `mia-turns`).
+"""DynamoDB implementations: `SessionRepository` (tables `mia-sessions` and `mia-turns`),
+plus `MetaStore` and `CandidateCounter` (table `mia-meta`).
 
 DynamoDB has no float or datetime type, so models are converted to items here:
 datetimes become ISO 8601 strings, floats become `Decimal`, and `None` fields are
@@ -28,6 +29,7 @@ from mia.schemas import Session, SessionStatus, Turn
 SESSIONS_TABLE = "mia-sessions"
 TURNS_TABLE = "mia-turns"
 BY_CASE_INDEX = "by_case"
+META_TABLE = "mia-meta"
 
 
 def _to_dynamo(value: Any) -> Any:
@@ -245,3 +247,74 @@ def _update_args(
         "ExpressionAttributeNames": names,
         "ExpressionAttributeValues": values,
     }
+
+
+class DynamoMetaStore:
+    """`MetaStore` on `mia-meta`: quota counters (atomic, conditional) and the kill switch."""
+
+    def __init__(self, table: Any) -> None:
+        self._table = table
+
+    @classmethod
+    def from_env(cls, *, region: str = "us-east-1", table: str = META_TABLE) -> "DynamoMetaStore":
+        return cls(boto3.resource("dynamodb", region_name=region).Table(table))
+
+    def is_demo_open(self) -> bool:
+        """`config/demo.open`; a missing item means open (spec 3.4, P1)."""
+        try:
+            item = self._table.get_item(Key={"pk": "config", "sk": "demo"}).get("Item")
+        except ClientError as error:
+            raise RepositoryError(str(error)) from error
+        return True if item is None else bool(item.get("open", True))
+
+    def try_increment(self, pk: str, sk: str, limit: int, expires_at: int) -> bool:
+        try:
+            self._table.update_item(
+                Key={"pk": pk, "sk": sk},
+                UpdateExpression="ADD #count :one SET expires_at = :expires",
+                ConditionExpression="attribute_not_exists(#count) OR #count < :limit",
+                ExpressionAttributeNames={"#count": "count"},
+                ExpressionAttributeValues={":one": 1, ":limit": limit, ":expires": expires_at},
+            )
+        except ClientError as error:
+            if _is_conditional_failure(error):
+                return False
+            raise RepositoryError(str(error)) from error
+        return True
+
+    def decrement(self, pk: str, sk: str) -> None:
+        try:
+            self._table.update_item(
+                Key={"pk": pk, "sk": sk},
+                UpdateExpression="ADD #count :minus_one",
+                ExpressionAttributeNames={"#count": "count"},
+                ExpressionAttributeValues={":minus_one": -1},
+            )
+        except ClientError as error:
+            raise RepositoryError(str(error)) from error
+
+
+class DynamoCandidateCounter:
+    """`CandidateCounter` on `mia-meta`: one atomic counter per case."""
+
+    def __init__(self, table: Any) -> None:
+        self._table = table
+
+    @classmethod
+    def from_env(
+        cls, *, region: str = "us-east-1", table: str = META_TABLE
+    ) -> "DynamoCandidateCounter":
+        return cls(boto3.resource("dynamodb", region_name=region).Table(table))
+
+    def next(self, case_id: str) -> int:
+        try:
+            response = self._table.update_item(
+                Key={"pk": f"counter#case#{case_id}", "sk": "candidate_no"},
+                UpdateExpression="ADD #value :one",
+                ExpressionAttributeNames={"#value": "value"},
+                ExpressionAttributeValues={":one": 1},
+                ReturnValues="UPDATED_NEW",
+            )
+        except ClientError as error:
+            raise RepositoryError(str(error)) from error
+        return int(response["Attributes"]["value"])

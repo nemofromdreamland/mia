@@ -7,17 +7,18 @@ from unittest.mock import Mock
 import boto3
 import pytest
 from botocore.exceptions import ClientError
-from dynamo_tables import create_tables
+from dynamo_tables import create_meta_table, create_tables
 from moto import mock_aws
 
 from mia.repo_dynamo import (
+    DynamoCandidateCounter,
     DynamoSessionRepository,
     item_to_session,
     item_to_turn,
     session_to_item,
     turn_to_item,
 )
-from mia.repositories import RepositoryError, SessionRepository
+from mia.repositories import CandidateCounter, RepositoryError, SessionRepository
 from mia.schemas import AnswerScore, Session, ToolDecision, Turn
 
 T0 = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
@@ -192,3 +193,19 @@ def test_unexpected_client_error_becomes_repository_error(tables: tuple[Any, Any
         repo.list_completed()
     with pytest.raises(RepositoryError):
         repo.list_completed("caso-a")
+
+
+def test_candidate_counter_is_sequential_per_case(tables: tuple[Any, Any]) -> None:
+    counter = DynamoCandidateCounter(create_meta_table(boto3.resource("dynamodb", "us-east-1")))
+    assert isinstance(counter, CandidateCounter)
+    assert [counter.next("c1") for _ in range(3)] == [1, 2, 3]
+    assert counter.next("c2") == 1
+
+
+def test_candidate_counter_error_becomes_repository_error() -> None:
+    class Broken:
+        def update_item(self, **kwargs: Any) -> Any:
+            raise ClientError({"Error": {"Code": "InternalServerError"}}, "UpdateItem")
+
+    with pytest.raises(RepositoryError):
+        DynamoCandidateCounter(Broken()).next("c1")

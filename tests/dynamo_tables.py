@@ -1,8 +1,8 @@
-"""Creates the `mia-sessions` and `mia-turns` tables (with GSI `by_case`) in moto."""
+"""Creates the `mia-sessions`, `mia-turns` (GSI `by_case`) and `mia-meta` tables in moto."""
 
 from typing import Any
 
-from mia.repo_dynamo import BY_CASE_INDEX, SESSIONS_TABLE, TURNS_TABLE
+from mia.repo_dynamo import BY_CASE_INDEX, META_TABLE, SESSIONS_TABLE, TURNS_TABLE
 
 
 def create_tables(resource: Any) -> tuple[Any, Any]:
@@ -43,3 +43,18 @@ def create_tables(resource: Any) -> tuple[Any, Any]:
         ],
     )
     return sessions, turns
+
+
+def create_meta_table(resource: Any) -> Any:
+    return resource.create_table(
+        TableName=META_TABLE,
+        BillingMode="PAY_PER_REQUEST",
+        KeySchema=[
+            {"AttributeName": "pk", "KeyType": "HASH"},
+            {"AttributeName": "sk", "KeyType": "RANGE"},
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "pk", "AttributeType": "S"},
+            {"AttributeName": "sk", "AttributeType": "S"},
+        ],
+    )
