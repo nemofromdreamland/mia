@@ -19,13 +19,14 @@ variable "budget_limit_usd" {
 variable "bedrock_inference_profiles" {
   description = "Cross-region inference profiles the runtime may call (config/models.yaml)."
   type        = list(string)
-  default     = ["us.anthropic.claude-haiku-4-5-20251001-v1:0"]
+  # Nova 2 Lite: runtime answer suggestions for follow-ups (spec 5.6), another family than the judge.
+  default = ["us.anthropic.claude-haiku-4-5-20251001-v1:0", "us.amazon.nova-2-lite-v1:0"]
 }
 
 variable "bedrock_foundation_models" {
   description = "Foundation models behind those profiles (the profile routes to these regions)."
   type        = list(string)
-  default     = ["anthropic.claude-haiku-4-5-20251001-v1:0"]
+  default     = ["anthropic.claude-haiku-4-5-20251001-v1:0", "amazon.nova-2-lite-v1:0"]
 }
 
 variable "bedrock_profile_regions" {

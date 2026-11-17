@@ -149,3 +149,12 @@ describe("liveLines", () => {
     expect(liveLines(lines, last).map((l) => l.id)).toEqual([2, 3]);
   });
 });
+
+describe("AudioBubble", () => {
+  it("shows the answer as an audio message with its duration", async () => {
+    const { AudioBubble } = await import("@/components/interview/AudioBubble");
+    render(<AudioBubble pcm={new Int16Array(16_000 * 7)} persona="technical" />);
+    expect(screen.getByTestId("audio-bubble")).toHaveTextContent("Você");
+    expect(screen.getByRole("button", { name: "Ouvir sua resposta" })).toHaveTextContent("0:07");
+  });
+});

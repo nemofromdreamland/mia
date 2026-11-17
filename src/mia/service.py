@@ -46,6 +46,7 @@ from mia.repositories import (
     SessionRepository,
 )
 from mia.schemas import (
+    AnswerExample,
     AnswerResult,
     CaseStats,
     CaseSummary,
@@ -117,6 +118,7 @@ class ServiceDeps(BaseModel):
     report: Callable[[InterviewPlan, list[Turn]], ReportResult]
     clock: Clock
     cases_dir: Path
+    suggest: Any = None  # mia.suggestions.Suggest for follow-ups; None = plan examples only
 
 
 @contextmanager
@@ -404,24 +406,50 @@ def authorize_voice(deps: ServiceDeps, visitor_id: str, session_id: str) -> None
 
 
 def get_examples(deps: ServiceDeps, visitor_id: str, session_id: str) -> ExamplesView:
-    """Strong/weak example for the current question (spec 5.6). Marks `examples_seen`, which is
-    shown as a neutral note and never changes the score."""
+    """Strong/weak answer suggestion for the interviewer's latest line (spec 5.6): plan questions
+    use the case fixture; follow-ups are generated on demand. Marks `examples_seen`, a neutral
+    note that never changes the score."""
     with _session_lookup():
         session = deps.repo.get_session(visitor_id, session_id)
     if session.status != "in_progress" or session.current_question_id is None:
         raise ServiceError("invalid_state", "A entrevista não está em andamento.")
+    turns = deps.repo.list_turns(visitor_id, session_id)
+    last = turns[-1] if turns else None
+    if last is not None and last.is_follow_up and deps.suggest is not None:
+        try:
+            found = deps.suggest(
+                session.case_id or "",
+                last.question_id,
+                last.interviewer_text,
+                f"{session_id}#{last.turn_no}",
+            )
+        except LLMInvalidOutputError as exc:
+            raise ServiceError(
+                "provider_unavailable", "Sugestão indisponível.", retryable=True
+            ) from exc
+    else:
+        found = _plan_example(deps, session)
+    if not session.examples_seen:
+        _update(deps, session, "in_progress", {"examples_seen": True})
+    return ExamplesView(
+        question_id=found.question_id,
+        turn_no=last.turn_no if last else 0,
+        strong=found.strong,
+        weak=found.weak,
+    )
+
+
+def _plan_example(deps: ServiceDeps, session: Session) -> AnswerExample:
     try:
         examples = load_examples(session.case_id or "", deps.cases_dir)
     except CaseError as exc:
-        raise ServiceError("not_found", "Sem exemplos para este caso.") from exc
+        raise ServiceError("not_found", "Sem sugestões para este caso.") from exc
     found = next(
         (e for e in examples.examples if e.question_id == session.current_question_id), None
     )
     if found is None:
-        raise ServiceError("not_found", "Sem exemplos para esta pergunta.")
-    if not session.examples_seen:
-        _update(deps, session, "in_progress", {"examples_seen": True})
-    return ExamplesView(question_id=found.question_id, strong=found.strong, weak=found.weak)
+        raise ServiceError("not_found", "Sem sugestões para esta pergunta.")
+    return found
 
 
 def get_report(deps: ServiceDeps, visitor_id: str, session_id: str) -> ReportView:

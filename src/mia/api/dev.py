@@ -20,6 +20,7 @@ from mia.repositories import (
     InMemorySessionRepository,
 )
 from mia.service import ServiceDeps
+from mia.suggestions import model_suggest
 
 
 def _utc_now() -> datetime:
@@ -39,6 +40,7 @@ def build_dev_deps() -> ServiceDeps:
         report=lambda plan, turns: run_report(plan, turns, scorer=scorer),
         clock=_utc_now,
         cases_dir=CASES_DIR,
+        suggest=model_suggest(),
     )
 
 

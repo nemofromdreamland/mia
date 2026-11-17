@@ -84,6 +84,8 @@ describe("HomePage — cases", () => {
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Formato")).toBeInTheDocument();
     await userEvent.click(within(dialog).getByTestId("mode-voice"));
+    expect(within(dialog).getByTestId("mode-voice")).toHaveClass("data-[state=on]:bg-mia-muted");
+    expect(within(dialog).getByTestId("mode-voice")).toHaveAttribute("data-state", "on");
     await userEvent.click(within(dialog).getByTestId("start-case"));
     await waitFor(() => expect(calls.find((c) => c.method === "POST")?.body).toEqual({
       case_id: "prompt-engineer-jr",

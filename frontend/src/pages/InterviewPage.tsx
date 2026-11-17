@@ -6,6 +6,7 @@ import { SessionNotFound } from "@/components/FullPageState";
 import { InlineNotice } from "@/components/InlineNotice";
 import { AnswerComposer } from "@/components/interview/AnswerComposer";
 import { AnswerExamples } from "@/components/interview/AnswerExamples";
+import { AudioBubble } from "@/components/interview/AudioBubble";
 import { EndPanel } from "@/components/interview/EndPanel";
 import { InterviewHeader } from "@/components/interview/InterviewHeader";
 import { QuestionDivider } from "@/components/interview/QuestionDivider";
@@ -311,7 +312,9 @@ function Interview({ id, view, reload }: InterviewProps) {
           </Fragment>
         ))}
         {liveLines(voice.lines, turns[last]?.interviewer_text).map((l) =>
-          l.final ? (
+          l.audio ? (
+            <AudioBubble key={l.id} pcm={l.audio} persona={session.persona} />
+          ) : l.final ? (
             <TranscriptTurn
               key={l.id}
               variant={l.role === "interviewer" ? "mia" : "candidate"}
@@ -343,7 +346,7 @@ function Interview({ id, view, reload }: InterviewProps) {
       ) : voiceMode ? (
         <Footer>
           <AnswerExamples
-            key={voice.lines.filter((l) => l.role === "candidate" && l.final).length}
+            key={voice.turnsSaved}
             sessionId={id}
           />
           <VoiceBar

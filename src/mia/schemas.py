@@ -524,5 +524,6 @@ class ExamplesView(BaseModel):
     """GET /sessions/{id}/examples: examples for the current question only."""
 
     question_id: str
+    turn_no: int  # the interviewer line these suggestions answer
     strong: str
     weak: str

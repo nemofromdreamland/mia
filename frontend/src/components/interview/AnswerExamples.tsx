@@ -30,7 +30,7 @@ export function AnswerExamples({ sessionId, onUse }: AnswerExamplesProps) {
       setData(await apiRequest<ExamplesView>("GET", `/sessions/${sessionId}/examples`));
     } catch (err) {
       const e = err instanceof ApiError ? err : new ApiError("internal", true, null);
-      setError(e.code === "not_found" ? "Sem exemplos para esta pergunta." : errorMessage(e, "interview").text);
+      setError(e.code === "not_found" ? "Sem sugestão para esta pergunta." : errorMessage(e, "interview").text);
     } finally {
       setLoading(false);
     }
@@ -47,7 +47,7 @@ export function AnswerExamples({ sessionId, onUse }: AnswerExamplesProps) {
         data-testid="examples-toggle"
       >
         {open ? <ChevronUp aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
-        {open ? "Esconder exemplos" : "Ver exemplos"}
+        {open ? "Esconder sugestão de resposta" : "Sugestão de resposta"}
       </Button>
       {open && (
         <div className="flex max-h-[40dvh] flex-col gap-3 overflow-y-auto" data-testid="examples-panel">
@@ -82,7 +82,7 @@ function Example({
       <p className="text-small text-foreground-soft">{text}</p>
       {onUse && (
         <Button variant="link" size="sm" className="h-auto self-start p-0" onClick={() => onUse(text)}>
-          Usar este exemplo
+          Usar esta resposta
         </Button>
       )}
     </section>

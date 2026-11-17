@@ -9,7 +9,14 @@ export type VoiceStatus = "connecting" | "speaking" | "listening" | "thinking" |
 /** The visitor's recording, like an audio message: nothing is sent before "Enviar". */
 export type RecordState = "idle" | "recording" | "recorded" | "playing" | "denied";
 
-export type LiveLine = { id: number; role: "interviewer" | "candidate"; text: string; final: boolean };
+export type LiveLine = {
+  id: number;
+  role: "interviewer" | "candidate";
+  text: string;
+  final: boolean;
+  /** Candidate answers are shown as an audio bubble (the local recording), like WhatsApp. */
+  audio?: Int16Array;
+};
 
 type ServerEvent = { type: string; payload?: Record<string, unknown> };
 
@@ -21,6 +28,8 @@ export type UseVoice = {
   recordedSeconds: number;
   notice: string | null;
   lines: LiveLine[];
+  /** Grows on every turn.saved: the interviewer's next line is on its way. */
+  turnsSaved: number;
   error: ApiError | null;
   startRecording: () => void;
   stopRecording: () => void;
@@ -40,6 +49,8 @@ export function useVoice(sessionId: string, enabled: boolean, onEnded: () => voi
   const [recordedSeconds, setRecordedSeconds] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [lines, setLines] = useState<LiveLine[]>([]);
+  const [turnsSaved, setTurnsSaved] = useState(0);
+  const nextIdRef = useRef(0);
   const [error, setError] = useState<ApiError | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<Recorder | null>(null);
@@ -55,7 +66,6 @@ export function useVoice(sessionId: string, enabled: boolean, onEnded: () => voi
     let cancelled = false;
     let player: Player | null = null;
     let ws: WebSocket | null = null;
-    let nextId = 0;
     endingRef.current = false;
 
     const onLine = (role: LiveLine["role"], text: string, final: boolean) => {
@@ -65,7 +75,7 @@ export function useVoice(sessionId: string, enabled: boolean, onEnded: () => voi
           return [...list.slice(0, -1), { ...last, text, final }];
         }
         if (final && last && last.role === role && last.final && last.text === text) return list;
-        return [...list, { id: nextId++, role, text, final }];
+        return [...list, { id: nextIdRef.current++, role, text, final }];
       });
     };
 
@@ -83,7 +93,11 @@ export function useVoice(sessionId: string, enabled: boolean, onEnded: () => voi
           setStatus("speaking");
           break;
         case "transcript":
-          onLine(p.role === "candidate" ? "candidate" : "interviewer", String(p.text ?? ""), Boolean(p.final));
+          // The candidate's own answer is already on screen as an audio bubble.
+          if (p.role !== "candidate") onLine("interviewer", String(p.text ?? ""), Boolean(p.final));
+          break;
+        case "turn.saved":
+          setTurnsSaved((n) => n + 1);
           break;
         case "session.ended":
           endingRef.current = true;
@@ -198,6 +212,7 @@ export function useVoice(sessionId: string, enabled: boolean, onEnded: () => voi
       ws.send(JSON.stringify({ type: "audio.chunk", payload: { data: bytesToBase64(chunk) } }));
     }
     ws.send(JSON.stringify({ type: "answer.submit", payload: {} }));
+    setLines((list) => [...list, { id: nextIdRef.current++, role: "candidate", text: "", final: true, audio: pcm }]);
     recordingRef.current = null;
     setRecord("idle");
     setStatus("thinking");
@@ -220,6 +235,7 @@ export function useVoice(sessionId: string, enabled: boolean, onEnded: () => voi
     recordedSeconds,
     notice,
     lines,
+    turnsSaved,
     error,
     startRecording,
     stopRecording,

@@ -115,7 +115,7 @@ export type ReportView = {
 };
 
 /** Spec 5.6: strong/weak example answers for the current question. */
-export type ExamplesView = { question_id: string; strong: string; weak: string };
+export type ExamplesView = { question_id: string; turn_no: number; strong: string; weak: string };
 
 export type CaseStats = { case_id: string; completed_sessions: number; average_score: number | null };
 

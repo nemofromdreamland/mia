@@ -113,7 +113,7 @@ function CandidateBody({ data, caseInfo }: BodyProps) {
         <h1 className="text-h1">{summary.headline}</h1>
         <p className="text-small text-muted-foreground">{meta.join(" · ")}</p>
         {data.examples_seen && (
-          <p className="text-small text-muted-foreground">Exemplos vistos nesta simulação.</p>
+          <p className="text-small text-muted-foreground">Sugestões de resposta vistas nesta simulação.</p>
         )}
       </section>
 

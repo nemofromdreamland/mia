@@ -88,10 +88,10 @@ export function CaseDialog({ item, blocked, onClose, onCreated, onBlocked }: Cas
                   onValueChange={(value) => value && setMode(value as Mode)}
                   className="w-full"
                 >
-                  <ToggleGroupItem value="text" data-testid="mode-text" className="flex-1">
+                  <ToggleGroupItem value="text" data-testid="mode-text" className="flex-1 data-[state=on]:border-mia data-[state=on]:bg-mia-muted data-[state=on]:text-mia">
                     Texto
                   </ToggleGroupItem>
-                  <ToggleGroupItem value="voice" data-testid="mode-voice" className="flex-1">
+                  <ToggleGroupItem value="voice" data-testid="mode-voice" className="flex-1 data-[state=on]:border-mia data-[state=on]:bg-mia-muted data-[state=on]:text-mia">
                     Voz
                   </ToggleGroupItem>
                 </ToggleGroup>

@@ -20,12 +20,10 @@ from mia.llm import load_models_config
 from mia.pii import mask_cv
 from mia.prompts import available_versions, load_prompt, resolve_prompt_model, run_prompt
 from mia.schemas import AnswerExample, CaseExamples, Question
+from mia.suggestions import STRONG, WEAK
 
 PROMPT_NAME = "synthetic_candidate"
 EXPERIMENT = "examples-5.6"
-# Short answers: they are read on screen (and aloud in voice mode).
-STRONG = ("5", "direto, concreto, com um exemplo e um resultado; no máximo 80 palavras")
-WEAK = ("2", "vago e genérico, quase sem exemplo; no máximo 40 palavras")
 
 Generate = Callable[[Question, str, tuple[str, str]], str]
 

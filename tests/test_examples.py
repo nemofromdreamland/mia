@@ -67,7 +67,8 @@ def test_examples_rest_and_invocations() -> None:
     sid = started(deps)
     client = TestClient(create_app(deps))
     rest = client.get(f"/sessions/{sid}/examples", headers={"X-Visitor-Id": VISITOR_A})
-    assert rest.status_code == 200 and set(rest.json()) == {"question_id", "strong", "weak"}
+    assert rest.status_code == 200
+    assert set(rest.json()) == {"question_id", "turn_no", "strong", "weak"}
     inv = client.post(
         "/invocations",
         json={"action": "get_examples", "visitor_id": VISITOR_A, "session_id": sid},
@@ -91,3 +92,49 @@ def test_build_examples_script_with_fake_generator(tmp_path) -> None:
     (tmp_path / CASE_ID).mkdir()
     path = build_examples.write(examples, tmp_path)
     assert json.loads(path.read_text(encoding="utf-8"))["case_id"] == CASE_ID
+
+
+def test_follow_up_gets_a_fresh_runtime_suggestion() -> None:
+    from mia.schemas import AnswerExample, ToolDecision
+
+    seen = []
+
+    def suggest(case_id, question_id, text, key):
+        seen.append((case_id, question_id, text, key))
+        return AnswerExample(question_id=question_id, strong="forte nova", weak="fraca nova")
+
+    deps = make_deps(scorer=lambda q, a: None).model_copy(
+        update={
+            "suggest": suggest,
+            "decider": lambda q, a, s, t: ToolDecision(
+                action="follow_up", follow_up_text="E o desafio?", reason="raso"
+            ),
+        }
+    )
+    sid = started(deps)
+    plan_view = get_examples(deps, VISITOR_A, sid)
+    from mia.service import send_answer
+
+    send_answer(deps, VISITOR_A, sid, "Usei Python.")
+    view = get_examples(deps, VISITOR_A, sid)
+    last = deps.repo.list_turns(VISITOR_A, sid)[-1]
+    assert last.is_follow_up
+    assert (view.strong, view.weak) == ("forte nova", "fraca nova")
+    assert view.turn_no == last.turn_no and view.turn_no != plan_view.turn_no
+    assert seen == [(CASE_ID, last.question_id, last.interviewer_text, f"{sid}#{last.turn_no}")]
+
+
+def test_model_suggest_caches_per_key(monkeypatch) -> None:
+    from mia import suggestions
+
+    calls = []
+    monkeypatch.setattr(
+        suggestions,
+        "generate_answer",
+        lambda text, cv, target, model=None: calls.append(model) or f"{target[0]} {text}",
+    )
+    suggest = suggestions.model_suggest()
+    first = suggest(CASE_ID, "q1", "E o desafio?", "k")
+    again = suggest(CASE_ID, "q1", "E o desafio?", "k")
+    assert first is again and len(calls) == 2  # strong + weak, once
+    assert set(calls) == {suggestions.RUNTIME_MODEL}
