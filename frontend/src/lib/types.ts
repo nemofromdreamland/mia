@@ -108,3 +108,36 @@ export type Report = {
 };
 
 export type ReportView = { report: Report; turns: Turn[]; is_above_case_avg: boolean | null };
+
+export type CaseStats = { case_id: string; completed_sessions: number; average_score: number | null };
+
+/** Anonymous recruiter row: no visitor data by design. */
+export type RecruiterCandidateRow = {
+  session_id: string;
+  case_id: string;
+  candidate_no: number;
+  ended_at: string;
+  overall_score: number;
+  delta_vs_case_avg: number | null;
+  headline: string;
+};
+
+export type RecruiterList = { stats: CaseStats[]; candidates: RecruiterCandidateRow[] };
+export type SummaryPoint = { point: string; answer_quote: string };
+export type NextStep = "advance" | "advance_with_caution" | "not_now";
+
+export type CandidateSummary = {
+  headline: string;
+  summary: string;
+  strengths: SummaryPoint[];
+  concerns: SummaryPoint[];
+  suggested_next_step: NextStep;
+  next_step_reason: string;
+};
+
+export type RecruiterCandidate = {
+  row: RecruiterCandidateRow;
+  summary: CandidateSummary;
+  report: Report;
+  turns: Turn[];
+};

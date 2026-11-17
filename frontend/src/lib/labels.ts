@@ -1,5 +1,6 @@
 // pt-BR labels from Design sections 5.6, 5.8, 5.14 and 5.30.
-import type { Level, Persona, SessionStatus } from "./types";
+import { formatScore } from "./format";
+import type { Level, NextStep, Persona, SessionStatus } from "./types";
 
 const PERSONA_SHORT: Record<Persona, string> = { hr: "RH", technical: "TÉCNICA", manager: "GESTÃO" };
 const PERSONA_COLUMN: Record<Persona, string> = { hr: "RH", technical: "Técnica", manager: "Gestão" };
@@ -57,4 +58,20 @@ export function fitLabel(score: number): string {
   if (score < 40) return "Aderência baixa";
   if (score < 70) return "Aderência média";
   return "Aderência alta";
+}
+
+const NEXT_STEP: Record<NextStep, string> = {
+  advance: "AVANÇAR PARA A PRÓXIMA ETAPA",
+  advance_with_caution: "AVANÇAR COM RESSALVAS",
+  not_now: "NÃO AVANÇAR AGORA",
+};
+
+/** NextStepTag text (Design 6.8). */
+export function nextStepLabel(step: NextStep): string {
+  return NEXT_STEP[step];
+}
+
+/** Difference to the case average, with sign: 0.8 → "+0,8" (no color, no arrow). */
+export function formatDelta(delta: number): string {
+  return `${delta >= 0 ? "+" : "−"}${formatScore(Math.abs(delta))}`;
 }
