@@ -272,7 +272,7 @@ def test_routes_match_the_proxy() -> None:
     declared = set(re.findall(r'"((?:GET|POST|DELETE) /[^"]*)"', read_infra()))
     assert "for_each" in block
     assert declared == handler_route_keys()
-    assert len(declared) == 11
+    assert len(declared) == 12  # 11 REST routes + voice-url (spec 5)
 
 
 def test_integration_is_lambda_payload_2() -> None:
@@ -461,3 +461,14 @@ def test_visitor_limit_goes_to_the_runtime() -> None:
     assert "MIA_VISITOR_DAILY_LIMIT = tostring(var.visitor_daily_limit)" in block
     match = re.search(r'variable "visitor_daily_limit" \{[^}]*\}', squash(read_infra()))
     assert match and "default = 20" in match.group(0)
+
+
+def test_voice_infra_permissions_and_header() -> None:
+    """Spec 5: WebSocket invoke for the proxy, Sonic for the runtime, one custom header."""
+    infra = read_infra()
+    assert "bedrock-agentcore:InvokeAgentRuntimeWithWebSocketStream" in infra
+    assert "bedrock:InvokeModelWithBidirectionalStream" in infra
+    assert "foundation-model/amazon.nova-2-sonic-v1:0" in infra
+    runtime = resource_block("aws_bedrockagentcore_agent_runtime", "backend")
+    assert "request_header_allowlist" in runtime
+    assert '"X-Amzn-Bedrock-AgentCore-Runtime-Custom-X-Visitor-Id"' in runtime

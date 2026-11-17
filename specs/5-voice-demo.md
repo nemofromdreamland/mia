@@ -105,7 +105,7 @@ def build_voice_url(arn: str, qualifier: str, runtime_session: str, visitor_id: 
 | --- | --- | --- | --- | --- | --- |
 | 1 | Config, schemas e `open_sonic_stream` + `VoiceSession` com Sonic falso | `config/voice.yaml`, `schemas.py`, `llm.py`, `voice/sonic.py`, `tests/test_sonic.py` | R4, R5, R6, R9 | `uv run pytest tests/test_sonic.py -v` | feito |
 | 2 | Endpoint `/ws` e `authorize_voice` | `api/ws.py`, `app.py`, `service.py`, `invocations.py`, `tests/test_api_ws.py` | R1–R3, R7, R8 | `uv run pytest tests/test_api_ws.py -v` | feito |
-| 3 | Rota `voice-url` na proxy + Terraform | `proxy/handler.py`, `infra/*.tf`, `tests/test_proxy.py`, `tests/test_infra.py` | R10, R11, R15 | `uv run pytest tests/test_proxy.py tests/test_infra.py -v && terraform -chdir=infra validate` | pendente |
+| 3 | Rota `voice-url` na proxy + Terraform | `proxy/handler.py`, `infra/*.tf`, `tests/test_proxy.py`, `tests/test_infra.py` | R10, R11, R15 | `uv run pytest tests/test_proxy.py tests/test_infra.py -v && terraform -chdir=infra validate` | feito |
 | 4 | Front: protocolo, captura, reprodução, VoiceBar, fallback | `frontend/src/voice/*`, `VoiceBar.tsx`, `MicButton.tsx`, `InterviewPage.tsx` | R12–R14 | `npm --prefix frontend test` | pendente |
 | 5 | Deploy (com confirmação): imagem nova, `terraform plan`/`apply`, proxy, front; encerrar microVMs antigas | scripts existentes | todos | conversa por voz na URL, com fone | pendente |
 

@@ -66,3 +66,22 @@ def test_recruiter_case_filter_must_be_string() -> None:
 
 def test_envelope_without_action_is_invalid_input() -> None:
     assert_invalid_input(invoke({"visitor_id": VISITOR_A}))
+
+
+def test_authorize_voice_action() -> None:
+    from mia.service import create_session
+
+    deps = make_deps()
+    sid = create_session(deps, VISITOR_A, CASE_ID, "voice").session_id
+    c = TestClient(create_app(deps), raise_server_exceptions=False)
+    ok = c.post(
+        "/invocations",
+        json={"action": "authorize_voice", "visitor_id": VISITOR_A, "session_id": sid},
+    )
+    assert ok.status_code == 200 and ok.json() == {"authorized": True}
+    text_sid = create_session(deps, VISITOR_A, CASE_ID, "text").session_id
+    bad = c.post(
+        "/invocations",
+        json={"action": "authorize_voice", "visitor_id": VISITOR_A, "session_id": text_sid},
+    )
+    assert bad.json()["error"]["code"] == "invalid_state"

@@ -3,7 +3,7 @@
 
 resource "aws_bedrockagentcore_agent_runtime" "backend" {
   agent_runtime_name = "mia_backend"
-  description        = "MIA backend (FastAPI, /ping + /invocations)"
+  description        = "MIA backend (FastAPI, /ping + /invocations + /ws)"
   role_arn           = aws_iam_role.runtime.arn
 
   agent_runtime_artifact {
@@ -18,6 +18,12 @@ resource "aws_bedrockagentcore_agent_runtime" "backend" {
 
   protocol_configuration {
     server_protocol = "HTTP"
+  }
+
+  # Voice (spec 5): the only custom header the runtime forwards to /ws; the proxy signs it
+  # into the presigned URL, so the visitor cannot be swapped by the browser.
+  request_header_configuration {
+    request_header_allowlist = ["X-Amzn-Bedrock-AgentCore-Runtime-Custom-X-Visitor-Id"]
   }
 
   environment_variables = {
@@ -39,12 +45,19 @@ resource "aws_bedrockagentcore_agent_runtime_endpoint" "live" {
   agent_runtime_version = aws_bedrockagentcore_agent_runtime.backend.agent_runtime_version
 }
 
+locals {
+  runtime_invoke_actions = [
+    "bedrock-agentcore:InvokeAgentRuntime",
+    "bedrock-agentcore:InvokeAgentRuntimeWithWebSocketStream",
+  ]
+}
+
 # Resource policy: allow the proxy role, deny every other principal (even admins of the account).
 data "aws_iam_policy_document" "runtime_invoke" {
   statement {
     sid       = "AllowProxy"
     effect    = "Allow"
-    actions   = ["bedrock-agentcore:InvokeAgentRuntime"]
+    actions   = local.runtime_invoke_actions
     resources = [aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn]
 
     principals {
@@ -56,7 +69,7 @@ data "aws_iam_policy_document" "runtime_invoke" {
   statement {
     sid       = "DenyEveryoneElse"
     effect    = "Deny"
-    actions   = ["bedrock-agentcore:InvokeAgentRuntime"]
+    actions   = local.runtime_invoke_actions
     resources = [aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn]
 
     principals {

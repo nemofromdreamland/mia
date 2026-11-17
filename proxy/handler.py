@@ -12,8 +12,11 @@ import re
 import uuid
 from functools import cache
 from typing import Any
+from urllib.parse import quote, urlencode, urlparse
 
 import boto3
+from botocore.auth import SigV4QueryAuth
+from botocore.awsrequest import AWSRequest
 from botocore.exceptions import BotoCoreError, ClientError
 
 SESSION = r"(?P<sid>[A-Za-z0-9]+)"
@@ -31,6 +34,7 @@ ROUTES: list[tuple[str, re.Pattern[str], str]] = [
         ("DELETE", f"/sessions/{SESSION}", "delete_session"),
         ("GET", "/recruiter/candidates", "list_recruiter_candidates"),
         ("GET", f"/recruiter/candidates/{SESSION}", "get_recruiter_candidate"),
+        ("POST", f"/sessions/{SESSION}/voice-url", "voice_url"),
     )
 ]
 # Same set as NO_VISITOR in src/mia/api/invocations.py: the visitor is validated, not forwarded.
@@ -51,6 +55,10 @@ STATUS_BY_CODE = {
 }
 SUCCESS_STATUS = {"create_session": 201, "delete_session": 204}
 JSON_HEADERS = {"content-type": "application/json"}
+# Voice (spec 5): the browser gets a SigV4 presigned wss:// URL to the runtime's /ws.
+VOICE_URL_EXPIRES = 300  # AgentCore maximum for presigned WebSocket URLs
+VISITOR_QUERY_HEADER = "X-Amzn-Bedrock-AgentCore-Runtime-Custom-X-Visitor-Id"
+SESSION_QUERY_HEADER = "X-Amzn-Bedrock-AgentCore-Runtime-Session-Id"
 INTERNAL_MESSAGE = "Erro interno. Tente de novo."
 
 
@@ -152,24 +160,87 @@ def to_http(action: str, body: bytes) -> dict[str, Any]:
     return _response(status, "" if status == 204 else text)
 
 
-def handle(event: dict[str, Any], client: Any, arn: str, qualifier: str) -> dict[str, Any]:
+def build_voice_url(
+    arn: str,
+    qualifier: str,
+    runtime_session: str,
+    visitor_id: str,
+    credentials: Any,
+    region: str,
+    expires: int = VOICE_URL_EXPIRES,
+) -> str:
+    """Presigned wss:// URL to the runtime's /ws. The visitor goes in as a signed custom
+    header, so the browser cannot change it without breaking the signature."""
+    query = urlencode(
+        {
+            "qualifier": qualifier,
+            VISITOR_QUERY_HEADER: visitor_id,
+            SESSION_QUERY_HEADER: runtime_session,
+        }
+    )
+    host = f"bedrock-agentcore.{region}.amazonaws.com"
+    url = f"https://{host}/runtimes/{quote(arn, safe='')}/ws?{query}"
+    request = AWSRequest(method="GET", url=url, headers={"host": urlparse(url).hostname})
+    SigV4QueryAuth(credentials, "bedrock-agentcore", region, expires=expires).add_auth(request)
+    return request.url.replace("https://", "wss://", 1)
+
+
+def _invoke(client: Any, arn: str, qualifier: str, invocation: dict[str, Any]) -> bytes:
+    result = client.invoke_agent_runtime(
+        agentRuntimeArn=arn,
+        qualifier=qualifier,
+        runtimeSessionId=runtime_session_id(invocation.get("visitor_id")),
+        contentType="application/json",
+        accept="application/json",
+        payload=json.dumps(invocation).encode(),
+    )
+    body: bytes = result["response"].read()
+    return body
+
+
+def voice_url(
+    invocation: dict[str, Any], client: Any, arn: str, qualifier: str, signer: Any
+) -> dict[str, Any]:
+    """Authorize in the backend (owner, voice mode, status, kill switch), then sign."""
+    check = {**invocation, "action": "authorize_voice"}
+    denied = to_http("authorize_voice", _invoke(client, arn, qualifier, check))
+    if denied["statusCode"] != 200:
+        return denied
+    visitor = invocation["visitor_id"]
+    url = signer(arn, qualifier, runtime_session_id(visitor), visitor)
+    body = json.dumps({"url": url, "expires_in": VOICE_URL_EXPIRES})
+    return {
+        "statusCode": 200,
+        "headers": {**JSON_HEADERS, "cache-control": "no-store"},
+        "body": body,
+    }
+
+
+def handle(
+    event: dict[str, Any], client: Any, arn: str, qualifier: str, signer: Any = None
+) -> dict[str, Any]:
     try:
         invocation = build_invocation(event)
     except ProxyError as error:
         return _error(error.code, error.message, retryable=False)
     try:
-        result = client.invoke_agent_runtime(
-            agentRuntimeArn=arn,
-            qualifier=qualifier,
-            runtimeSessionId=runtime_session_id(invocation.get("visitor_id")),
-            contentType="application/json",
-            accept="application/json",
-            payload=json.dumps(invocation).encode(),
-        )
-        body = result["response"].read()
-    except (BotoCoreError, ClientError):
+        if invocation["action"] == "voice_url":
+            return voice_url(invocation, client, arn, qualifier, signer or _signer)
+        body = _invoke(client, arn, qualifier, invocation)
+    except (BotoCoreError, ClientError, RuntimeError):
         return _error("internal", INTERNAL_MESSAGE, retryable=True)  # never echo ARN/details
     return to_http(invocation["action"], body)
+
+
+def _signer(arn: str, qualifier: str, runtime_session: str, visitor_id: str) -> str:
+    """Sign with the Lambda role's temporary credentials (never keys in code)."""
+    session = boto3.Session()
+    credentials = session.get_credentials()
+    if credentials is None:
+        raise RuntimeError("no credentials")
+    region = session.region_name or os.environ.get("AWS_REGION", "us-east-1")
+    frozen = credentials.get_frozen_credentials()
+    return build_voice_url(arn, qualifier, runtime_session, visitor_id, frozen, region)
 
 
 @cache
