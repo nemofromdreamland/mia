@@ -45,7 +45,15 @@ def test_interviewer_v2_is_short_and_on_bedrock() -> None:
     assert prompt.changelog
 
 
-def test_default_writer_uses_v2_and_finishes_sentences(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_interviewer_v3_acknowledges_the_last_answer() -> None:
+    prompt = load_prompt("interviewer", 3)
+    assert prompt.params == load_prompt("interviewer", 2).params
+    assert "2 a 6 palavras" in prompt.system
+    assert "Vamos manter o foco na entrevista." in prompt.system
+    assert prompt.model.startswith("bedrock:") and prompt.changelog
+
+
+def test_default_writer_uses_v3_and_finishes_sentences(monkeypatch: pytest.MonkeyPatch) -> None:
     seen = {}
 
     def fake_run(prompt, variables, **kwargs):  # type: ignore[no-untyped-def]
@@ -55,7 +63,7 @@ def test_default_writer_uses_v2_and_finishes_sentences(monkeypatch: pytest.Monke
     monkeypatch.setattr(interviewer, "run_prompt", fake_run)
     write = interviewer.default_writer(persona="technical")
     assert write("opening", "Q?", "faça", []) == "Boa resposta."
-    assert seen["version"] == 2
+    assert seen["version"] == 3
 
 
 # ---------- R3, R4: shorter interview ----------
