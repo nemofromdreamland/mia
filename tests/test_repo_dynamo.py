@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -200,6 +201,14 @@ def test_candidate_counter_is_sequential_per_case(tables: tuple[Any, Any]) -> No
     assert isinstance(counter, CandidateCounter)
     assert [counter.next("c1") for _ in range(3)] == [1, 2, 3]
     assert counter.next("c2") == 1
+
+
+def test_candidate_counter_concurrent_numbers_are_distinct(tables: tuple[Any, Any]) -> None:
+    counter = DynamoCandidateCounter(create_meta_table(boto3.resource("dynamodb", "us-east-1")))
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        numbers = list(pool.map(lambda _: counter.next("case_x"), range(20)))
+    assert len(numbers) == 20
+    assert set(numbers) == set(range(1, 21))
 
 
 def test_candidate_counter_error_becomes_repository_error() -> None:
