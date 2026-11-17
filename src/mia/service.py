@@ -16,6 +16,7 @@ from mia.cases import CaseError, CaseNotFoundError, load_case
 from mia.cases import list_cases as load_cases
 from mia.interviewer import (
     DEFAULT_LIMITS,
+    WEB_LIMITS,
     Clock,
     Decider,
     InterviewError,
@@ -23,6 +24,7 @@ from mia.interviewer import (
     Scorer,
     Writer,
     answer,
+    shorten_plan,
     start,
 )
 from mia.interviewer import end_interview as close_interview
@@ -218,7 +220,7 @@ def rebuild_state(session: Session, plan: InterviewPlan, turns: list[Turn]) -> I
 
 def _load_plan(deps: ServiceDeps, session: Session) -> InterviewPlan:
     try:
-        return load_case(session.case_id or "", deps.cases_dir).plan
+        return shorten_plan(load_case(session.case_id or "", deps.cases_dir).plan)
     except CaseError as exc:
         raise ServiceError("internal", "Caso indisponível.") from exc
 
@@ -290,6 +292,7 @@ def send_answer(
             writer=deps.writer_for(session.persona),
             scorer=deps.scorer,
             clock=deps.clock,
+            limits=WEB_LIMITS,
         )
     except InterviewError as exc:
         raise ServiceError("invalid_input", str(exc)) from exc
@@ -357,7 +360,11 @@ def end_interview(deps: ServiceDeps, visitor_id: str, session_id: str) -> dict[s
     plan = _load_plan(deps, session)
     state = rebuild_state(session, plan, deps.repo.list_turns(visitor_id, session_id))
     ended, farewell = close_interview(
-        state, "visitor", writer=deps.writer_for(session.persona), clock=deps.clock
+        state,
+        "visitor",
+        writer=deps.writer_for(session.persona),
+        clock=deps.clock,
+        limits=WEB_LIMITS,
     )
     deps.repo.put_turn(visitor_id, farewell)
     _finish(deps, session, ended)

@@ -61,8 +61,8 @@ def test_default_writer_uses_v2_and_finishes_sentences(monkeypatch: pytest.Monke
 # ---------- R3, R4: shorter interview ----------
 
 
-def test_default_limits() -> None:
-    limits = interviewer.DEFAULT_LIMITS
+def test_web_limits() -> None:
+    limits = interviewer.WEB_LIMITS
     assert (limits.max_follow_ups, limits.max_questions) == (1, 3)
     assert (limits.target_minutes, limits.hard_max_minutes) == (6, 8)
 
@@ -100,3 +100,18 @@ def test_real_cases_shorten_to_three(case_id: str) -> None:
     short = interviewer.shorten_plan(loaded.plan)
     assert len({q.id for q in short.questions}) == 3
     assert loaded.case.estimated_minutes == 6 and loaded.case.version == 2
+
+
+def test_cli_limits_unchanged() -> None:
+    limits = interviewer.DEFAULT_LIMITS
+    assert (limits.max_follow_ups, limits.hard_max_minutes) == (2, 15)
+
+
+def test_service_uses_web_limits() -> None:
+    import inspect
+
+    from mia import service
+
+    source = inspect.getsource(service)
+    assert source.count("limits=WEB_LIMITS") >= 2
+    assert "shorten_plan(load_case(" in source

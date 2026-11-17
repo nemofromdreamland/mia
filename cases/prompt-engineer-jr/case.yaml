@@ -6,5 +6,5 @@ persona: technical       # hr | technical | manager
 language: pt-BR
 blurb: "Consultoria de TI procura quem escreva, teste e avalie prompts para clientes grandes."
 candidate_blurb: "Você é Ana, recém-formada em Sistemas de Informação, com um projeto de chatbot com RAG."
-estimated_minutes: 10
-version: 1               # sobe quando cv, vaga ou plano mudam
+estimated_minutes: 6
+version: 2               # sobe quando cv, vaga ou plano mudam

@@ -47,6 +47,8 @@ class InterviewLimits(BaseModel):
 
     max_turns: int = 30
     max_follow_ups: int = 2
+    max_questions: int = 3  # used by shorten_plan (web only)
+    target_minutes: int = 6  # used by shorten_plan (web only)
     max_answer_chars: int = 4000
     hard_max_minutes: int = 15
     slack_minutes: int = 3
@@ -54,6 +56,34 @@ class InterviewLimits(BaseModel):
 
 
 DEFAULT_LIMITS = InterviewLimits()
+# Web demo (spec 4.7c): ~6 min, 3 questions, 1 follow-up. CLI and evals keep DEFAULT_LIMITS.
+WEB_LIMITS = InterviewLimits(max_follow_ups=1, hard_max_minutes=8)
+
+SHORT_PLAN_PHASES = ("opening", "technical", "behavioral")
+
+
+def shorten_plan(plan: InterviewPlan, limits: InterviewLimits = WEB_LIMITS) -> InterviewPlan:
+    """Keep `max_questions`: first opening, first technical, first behavioral question; a
+    missing phase is filled with the next questions in plan order (spec 4.7c, R4)."""
+    chosen: list[str] = []
+    for phase in SHORT_PLAN_PHASES:
+        first = next(
+            (q.id for q in plan.questions if q.phase == phase and q.id not in chosen), None
+        )
+        if first is not None:
+            chosen.append(first)
+    for question in plan.questions:
+        if len(chosen) >= limits.max_questions:
+            break
+        if question.id not in chosen:
+            chosen.append(question.id)
+    keep = set(chosen[: limits.max_questions])
+    return plan.model_copy(
+        update={
+            "questions": [q for q in plan.questions if q.id in keep],
+            "estimated_minutes": min(plan.estimated_minutes, limits.target_minutes),
+        }
+    )
 
 
 class InterviewState(BaseModel):

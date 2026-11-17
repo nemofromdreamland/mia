@@ -161,7 +161,7 @@ Só começa se o Gate 0 aprovou o Sonic e a Fase 4 está no ar. Se a URL de voz 
 
 ## Fase 6: depois de terça
 
-Sem prazo. A conta AWS continua ativa (paga) depois de terça: o cérebro segue no Bedrock (Claude Haiku), com Groq e Gemini só na comparação. É aqui que o projeto vira portfólio.
+Sem prazo. **Atualização (17/11):** o dono decidiu não fazer o upgrade; a conta AWS fecha ao fim do Free Plan, e a demo na AWS sai do ar. Tarefas que dependem de Bedrock (6.1 no Bedrock, 6.3) precisam de outra conta ou de outro provedor, a decidir. É aqui que o projeto vira portfólio.
 
 | ID | Tarefa | Quem | Entrega | Pronto quando |
 | --- | --- | --- | --- | --- |
@@ -171,6 +171,7 @@ Sem prazo. A conta AWS continua ativa (paga) depois de terça: o cérebro segue 
 | 6.4 | README: objetivo, arquitetura, método, resultados, limitações, modelo de ameaças, vídeo | Você + agente | `README.md` | Explicável em 2 minutos com números |
 | 6.5 | ADRs finais e `docs/guia-de-prompts.md` com o que funcionou e o que piorou | Você | `docs/` | Uma decisão por arquivo, com suas palavras |
 | 6.6 | Bullets do currículo e pitch de 2 minutos | Você | CV atualizado | Números reais em cada bullet |
+| 6.7 | Ideia do dono (teste de fumaça 4.7): opções de resposta prontas na simulação, para ir mais rápido. Precisa decidir como o juiz trata resposta escolhida (não escrita pelo candidato) | Você + agente | spec | Decisão registrada no PRD |
 
 ## Ordem de cortes se atrasar
 

@@ -153,7 +153,7 @@ O projeto é bem-sucedido quando cada linha abaixo tem um número real no README
 
 ## Premissas, restrições e riscos
 
-**Restrições.** A conta AWS está no Free Plan até terça (17/11); depois disso o dono decidiu (16/11) mantê-la ativa e pagar o uso do Bedrock. Orçamento: créditos AWS restantes, depois uso pago do Bedrock + free tier do Groq (Gemini só na comparação). Um desenvolvedor, nível júnior.
+**Restrições.** A conta AWS está no Free Plan até terça (17/11). Em 16/11 o dono pensou em mantê-la ativa e pagar o Bedrock; em 17/11 decidiu **não fazer o upgrade**: a conta fecha ao fim do Free Plan e a demo na AWS sai do ar. O que precisa da demo no ar (teste de fumaça 4.7 e vídeo 4.9) é feito até 17/11; os registros de custo da produção são copiados para `runs/` antes (tarefa 4.7b). Orçamento: créditos AWS restantes + free tier do Groq (Gemini só na comparação). Um desenvolvedor, nível júnior.
 
 **Premissas.** Bedrock responde no Free Plan com cota maior que zero; Bedrock e Groq free tier têm limite suficiente para os conjuntos de avaliação; o dono rotula manualmente o golden set e revisa os 5 casos.
 
