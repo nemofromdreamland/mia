@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "MIA — Mock Interview Assistant: AI interview simulator (portfolio project)."
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "aws-sdk-bedrock-runtime>=0.13.0",
+    "aws-sdk-bedrock-runtime>=0.10,<0.13",
+    "awscrt>=0.38.1",
     "boto3>=1.44.3",
     "fastapi>=0.163.1",
     "langchain>=1.5.0",

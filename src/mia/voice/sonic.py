@@ -158,7 +158,7 @@ class VoiceSession:
         )
         await send(_event("promptStart", self._prompt_start()))
         await self._send_text("SYSTEM", prompt.system, interactive=False)
-        await self._send_text("USER", prompt.user, interactive=False)
+        await self._send_text("USER", prompt.user, interactive=True)
         await send(_event("contentStart", self._audio_start()))
         self._initial_state = opening.state
 
