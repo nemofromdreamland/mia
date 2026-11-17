@@ -226,9 +226,9 @@ def should_follow_up(
 
 
 def default_writer(*, persona: Persona, **llm_options: Any) -> Writer:
-    """Writer backed by the interviewer prompt v3 (short acknowledgement of the last answer);
+    """Writer backed by the interviewer prompt v4 (short acknowledgement of the last answer);
     the code supplies phase and question."""
-    prompt = load_prompt("interviewer", 3)
+    prompt = load_prompt("interviewer", 4)
 
     def write(phase: Phase, question: str, instruction: str, history: list[Turn]) -> str:
         variables = {
