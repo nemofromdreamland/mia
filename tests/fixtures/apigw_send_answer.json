@@ -1,0 +1,31 @@
+{
+  "version": "2.0",
+  "routeKey": "$default",
+  "rawPath": "/sessions/01JD3Y7K2M4N8P0Q6R5S1T9V3W/turns",
+  "rawQueryString": "",
+  "headers": {
+    "accept": "*/*",
+    "content-length": "79",
+    "content-type": "application/json",
+    "host": "abc123.execute-api.us-east-1.amazonaws.com",
+    "x-visitor-id": "3f8b2c1e-7d4a-4f6b-9a2e-1c5d8e9f0a7b"
+  },
+  "requestContext": {
+    "accountId": "000000000000",
+    "apiId": "abc123",
+    "domainName": "abc123.execute-api.us-east-1.amazonaws.com",
+    "http": {
+      "method": "POST",
+      "path": "/sessions/01JD3Y7K2M4N8P0Q6R5S1T9V3W/turns",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "203.0.113.10",
+      "userAgent": "Mozilla/5.0"
+    },
+    "requestId": "test-request-id",
+    "routeKey": "$default",
+    "stage": "$default",
+    "timeEpoch": 1795392000000
+  },
+  "body": "{\"answer_text\": \"Eu usaria um cross-encoder para reranking porque...\", \"visitor_id\": \"x\"}",
+  "isBase64Encoded": false
+}

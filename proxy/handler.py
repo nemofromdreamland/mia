@@ -7,9 +7,14 @@ Validates `X-Visitor-Id`, translates the REST route into the `action` contract
 
 import base64
 import json
+import os
 import re
 import uuid
+from functools import cache
 from typing import Any
+
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 
 SESSION = r"(?P<sid>[A-Za-z0-9]+)"
 ROUTES: list[tuple[str, re.Pattern[str], str]] = [
@@ -32,6 +37,21 @@ ROUTES: list[tuple[str, re.Pattern[str], str]] = [
 PUBLIC_ACTIONS = frozenset({"list_cases", "list_recruiter_candidates", "get_recruiter_candidate"})
 BODY_ACTIONS = frozenset({"create_session", "send_answer"})
 PUBLIC_RUNTIME_SESSION = "mia-public-recruiter-and-catalogue"
+# Backend Schema, "Erros e validação"; an unknown code is treated as `internal`.
+STATUS_BY_CODE = {
+    "not_found": 404,
+    "invalid_input": 422,
+    "invalid_state": 409,
+    "session_limit": 409,
+    "quota_exceeded": 429,
+    "demo_paused": 503,
+    "llm_invalid_output": 502,
+    "provider_unavailable": 503,
+    "internal": 500,
+}
+SUCCESS_STATUS = {"create_session": 201, "delete_session": 204}
+JSON_HEADERS = {"content-type": "application/json"}
+INTERNAL_MESSAGE = "Erro interno. Tente de novo."
 
 
 class ProxyError(Exception):
@@ -108,3 +128,57 @@ def build_invocation(event: dict[str, Any]) -> dict[str, Any]:
 def runtime_session_id(visitor_id: str | None) -> str:
     """Stable id (>= 33 chars): one runtime session per visitor, one for public routes."""
     return PUBLIC_RUNTIME_SESSION if visitor_id is None else f"mia-visitor-{visitor_id}"
+
+
+def _response(status: int, body: str) -> dict[str, Any]:
+    return {"statusCode": status, "headers": dict(JSON_HEADERS), "body": body}
+
+
+def _error(code: str, message: str, retryable: bool) -> dict[str, Any]:
+    body = {"error": {"code": code, "message": message, "retryable": retryable}}
+    return _response(STATUS_BY_CODE[code], json.dumps(body, ensure_ascii=False))
+
+
+def to_http(action: str, body: bytes) -> dict[str, Any]:
+    """Runtime body -> API Gateway response; status from the error code or the action."""
+    text = body.decode()
+    try:
+        parsed = json.loads(text) if text else None
+    except ValueError:
+        parsed = None
+    if isinstance(parsed, dict) and isinstance(parsed.get("error"), dict):
+        return _response(STATUS_BY_CODE.get(parsed["error"].get("code"), 500), text)
+    status = SUCCESS_STATUS.get(action, 200)
+    return _response(status, "" if status == 204 else text)
+
+
+def handle(event: dict[str, Any], client: Any, arn: str, qualifier: str) -> dict[str, Any]:
+    try:
+        invocation = build_invocation(event)
+    except ProxyError as error:
+        return _error(error.code, error.message, retryable=False)
+    try:
+        result = client.invoke_agent_runtime(
+            agentRuntimeArn=arn,
+            qualifier=qualifier,
+            runtimeSessionId=runtime_session_id(invocation.get("visitor_id")),
+            contentType="application/json",
+            accept="application/json",
+            payload=json.dumps(invocation).encode(),
+        )
+        body = result["response"].read()
+    except (BotoCoreError, ClientError):
+        return _error("internal", INTERNAL_MESSAGE, retryable=True)  # never echo ARN/details
+    return to_http(invocation["action"], body)
+
+
+@cache
+def _client() -> Any:
+    """One boto3 client per Lambda container (reused across invocations)."""
+    return boto3.client("bedrock-agentcore")
+
+
+def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
+    arn = os.environ["AGENT_RUNTIME_ARN"]
+    qualifier = os.environ.get("AGENT_RUNTIME_QUALIFIER", "DEFAULT")
+    return handle(event, _client(), arn, qualifier)
