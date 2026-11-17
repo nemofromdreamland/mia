@@ -24,7 +24,7 @@ export const TranscriptTurn = forwardRef<HTMLDivElement, TranscriptTurnProps>(fu
     return (
       <div ref={ref} className="flex scroll-mt-4 flex-col gap-2">
         <SpeakerLabel speaker="mia" persona={persona} followUp={followUp} />
-        <p className="fala text-foreground">{text}</p>
+        <p className="fala text-foreground max-md:text-[1.125rem] max-md:leading-[1.75rem]">{text}</p>
       </div>
     );
   }

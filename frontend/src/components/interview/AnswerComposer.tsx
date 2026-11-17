@@ -12,6 +12,13 @@ type AnswerComposerProps = {
   error?: string | null;
 };
 
+const MOBILE_QUERY = "(max-width: 767px)";
+
+/** Section 12: on phones the field goes from 2 to 6 rows. */
+function isMobile(): boolean {
+  return typeof window !== "undefined" && Boolean(window.matchMedia?.(MOBILE_QUERY).matches);
+}
+
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
 /** Design section 5.13: Enter breaks the line, Ctrl/⌘ + Enter sends. */
@@ -20,6 +27,7 @@ export const AnswerComposer = forwardRef<HTMLTextAreaElement, AnswerComposerProp
   ref,
 ) {
   const [blank, setBlank] = useState(false);
+  const [mobile] = useState(isMobile);
   const helpId = useId();
   const message = error ?? (blank ? "Escreva uma resposta antes de enviar." : null);
 
@@ -47,8 +55,8 @@ export const AnswerComposer = forwardRef<HTMLTextAreaElement, AnswerComposerProp
         value={value}
         maxLength={4000}
         warnAt={3600}
-        minRows={3}
-        maxRows={10}
+        minRows={mobile ? 2 : 3}
+        maxRows={mobile ? 6 : 10}
         disabled={disabled}
         aria-invalid={error ? true : undefined}
         aria-describedby={message ? helpId : undefined}

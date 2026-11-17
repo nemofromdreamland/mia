@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { SessionNotFound } from "@/components/FullPageState";
 import { InlineNotice } from "@/components/InlineNotice";
 import { AnswerComposer } from "@/components/interview/AnswerComposer";
+import { EndPanel } from "@/components/interview/EndPanel";
 import { InterviewHeader } from "@/components/interview/InterviewHeader";
 import { QuestionDivider } from "@/components/interview/QuestionDivider";
 import { TranscriptTurn } from "@/components/interview/TranscriptTurn";
@@ -11,6 +13,7 @@ import { TypingIndicator } from "@/components/interview/TypingIndicator";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { usePolling } from "@/hooks/usePolling";
 import { useSessionView } from "@/hooks/useSessionView";
 import { ApiError, apiRequest } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
@@ -74,6 +77,7 @@ function Footer({ children }: { children: ReactNode }) {
 }
 
 type Pending = { text: string; state: "sending" | "failed" };
+type Ended = { status: "scoring" | "completed"; limit: boolean };
 
 function draftKey(id: string): string {
   return `mia:draft:${id}`;
@@ -107,6 +111,9 @@ function Interview({ id, view, reload }: InterviewProps) {
   const [slow, setSlow] = useState(false);
   const [composerError, setComposerError] = useState<string | null>(null);
   const [providerDown, setProviderDown] = useState(false);
+  const [ended, setEnded] = useState<Ended | null>(null);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [pollError, setPollError] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const lastMiaRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -119,14 +126,33 @@ function Interview({ id, view, reload }: InterviewProps) {
     return () => clearTimeout(timer);
   }, [id, draft]);
 
+  const isEnded = ended !== null;
   useEffect(() => {
+    if (isEnded) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, []);
+  }, [isEnded]);
+
+  const { offline } = usePolling(
+    async () => {
+      try {
+        return await apiRequest<SessionView>("GET", `/sessions/${id}`);
+      } catch (err) {
+        if (!(err instanceof ApiError && err.code === "network")) setPollError(true);
+        throw err;
+      }
+    },
+    {
+      enabled: ended?.status === "scoring" && !pollError,
+      onData: (data) => {
+        if (data.session.status === "completed") setEnded((e) => e && { ...e, status: "completed" });
+      },
+    },
+  );
 
   useEffect(() => {
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -161,6 +187,7 @@ function Interview({ id, view, reload }: InterviewProps) {
         ...(result.turn ? [result.turn] : []),
       ]);
       setPending(null);
+      if (result.ended) setEnded({ status: "scoring", limit: false });
     } catch (err) {
       if (controller.signal.aborted) return;
       fail(err instanceof ApiError ? err : new ApiError("internal", true, null), text);
@@ -173,6 +200,11 @@ function Interview({ id, view, reload }: InterviewProps) {
   }
 
   function fail(error: ApiError, text: string) {
+    if (error.code === "session_limit") {
+      setPending(null);
+      setEnded({ status: "scoring", limit: true });
+      return;
+    }
     setDraft(text);
     if (error.code === "invalid_input") {
       setPending(null);
@@ -188,6 +220,20 @@ function Interview({ id, view, reload }: InterviewProps) {
     if (error.code === "invalid_state") void reload();
   }
 
+  async function end() {
+    setConfirmEnd(false);
+    try {
+      await apiRequest("POST", `/sessions/${id}/end`);
+      abortRef.current?.abort();
+      setPending(null);
+      setEnded({ status: "scoring", limit: false });
+    } catch (err) {
+      const error = err instanceof ApiError ? err : new ApiError("internal", true, null);
+      toast(errorMessage(error, "interview").text);
+      if (error.code === "invalid_state") void reload();
+    }
+  }
+
   const numbers = questionNumbers(turns);
   const last = turns.length - 1;
   const sending = pending?.state === "sending";
@@ -200,7 +246,8 @@ function Interview({ id, view, reload }: InterviewProps) {
           jobTitle={session.job_title}
           questions={countQuestions(turns)}
           startedAt={session.started_at ?? null}
-          onEnd={() => {}}
+          onEnd={() => setConfirmEnd(true)}
+          endDisabled={isEnded}
         />
       }
     >
@@ -229,32 +276,59 @@ function Interview({ id, view, reload }: InterviewProps) {
         ))}
         {sending && <TypingIndicator slow={slow} onResend={() => pending && void send(pending.text)} />}
       </div>
-      <Footer>
-        {providerDown && pending && (
-          <InlineNotice variant="danger">
-            <p>{errorMessage(new ApiError("provider_unavailable", true, null), "interview").text}</p>
-            <div className="mt-2 flex gap-4">
-              <Button variant="link" size="sm" className="h-auto p-0" onClick={() => void send(pending.text)}>
-                Tentar de novo
-              </Button>
-              <Button variant="link" size="sm" className="h-auto p-0" onClick={() => navigate("/")}>
-                Voltar ao início
-              </Button>
-            </div>
-          </InlineNotice>
-        )}
-        <AnswerComposer
-          ref={composerRef}
-          value={draft}
-          onChange={(value) => {
-            setDraft(value);
-            setComposerError(null);
-          }}
-          onSend={() => void send(draft)}
-          sending={sending}
-          error={composerError}
-        />
-      </Footer>
+      {ended ? (
+        <Footer>
+          {ended.limit && (
+            <p className="text-small text-muted-foreground">
+              {errorMessage(new ApiError("session_limit", false, null), "interview").text}
+            </p>
+          )}
+          <EndPanel
+            status={ended.status}
+            sessionId={id}
+            pollError={pollError || offline}
+            onRetry={() => setPollError(false)}
+          />
+        </Footer>
+      ) : (
+        <Footer>
+          {providerDown && pending && (
+            <InlineNotice variant="danger">
+              <p>{errorMessage(new ApiError("provider_unavailable", true, null), "interview").text}</p>
+              <div className="mt-2 flex gap-4">
+                <Button variant="link" size="sm" className="h-auto p-0" onClick={() => void send(pending.text)}>
+                  Tentar de novo
+                </Button>
+                <Button variant="link" size="sm" className="h-auto p-0" onClick={() => navigate("/")}>
+                  Voltar ao início
+                </Button>
+              </div>
+            </InlineNotice>
+          )}
+          <AnswerComposer
+            ref={composerRef}
+            value={draft}
+            onChange={(value) => {
+              setDraft(value);
+              setComposerError(null);
+            }}
+            onSend={() => void send(draft)}
+            sending={sending}
+            error={composerError}
+          />
+        </Footer>
+      )}
+      <ConfirmDialog
+        open={confirmEnd}
+        title="Encerrar a entrevista?"
+        body="As respostas que você deu até aqui serão avaliadas. Não dá para retomar depois."
+        cancelLabel="Continuar entrevista"
+        confirmLabel="Encerrar"
+        confirmVariant="default"
+        confirmTestId="confirm-end"
+        onConfirm={() => void end()}
+        onOpenChange={setConfirmEnd}
+      />
     </Layout>
   );
 }
