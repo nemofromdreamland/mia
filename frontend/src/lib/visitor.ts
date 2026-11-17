@@ -48,6 +48,18 @@ export function clearMiaStorage(): void {
   }
 }
 
+/** False when the browser blocks localStorage (history will not be kept). */
+export function isStorageAvailable(): boolean {
+  try {
+    const probe = "mia:probe";
+    localStorage.setItem(probe, "1");
+    localStorage.removeItem(probe);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function __resetMemoryForTests(): void {
   memoryId = null;
 }

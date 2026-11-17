@@ -29,10 +29,6 @@ function RecruiterScreen({ title, tab }: ScreenProps) {
   );
 }
 
-export function HomePage() {
-  return <CandidateScreen title="Início" tab="Suas simulações" />;
-}
-
 export function PrepPage() {
   return <CandidateScreen title="Preparo" tab="Preparo" />;
 }

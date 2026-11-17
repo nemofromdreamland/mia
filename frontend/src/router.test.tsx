@@ -1,6 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { routes } from "@/router";
+import { mockApi } from "@/test/api";
+
+beforeEach(() => {
+  mockApi({ "GET /cases": [], "GET /sessions": [] });
+});
 
 function renderAt(path: string) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
