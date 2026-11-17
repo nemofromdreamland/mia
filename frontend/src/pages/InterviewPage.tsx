@@ -10,6 +10,7 @@ import { InterviewHeader } from "@/components/interview/InterviewHeader";
 import { QuestionDivider } from "@/components/interview/QuestionDivider";
 import { TranscriptTurn } from "@/components/interview/TranscriptTurn";
 import { TypingIndicator } from "@/components/interview/TypingIndicator";
+import { VoiceBar } from "@/components/interview/VoiceBar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -19,6 +20,7 @@ import { ApiError, apiRequest } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { countQuestions, questionNumbers } from "@/lib/interview";
 import type { AnswerResult, PublicTurn, SessionView } from "@/lib/types";
+import { useVoice, type LiveLine } from "@/voice/useVoice";
 
 const SLOW_AFTER_MS = 15_000;
 const DRAFT_DELAY_MS = 500;
@@ -100,6 +102,33 @@ function writeDraft(id: string, text: string): void {
   }
 }
 
+/** "Continuar em texto" lasts only for this tab (sessionStorage). */
+function fallbackKey(id: string): string {
+  return `mia:voice-fallback:${id}`;
+}
+
+function readFallback(id: string): boolean {
+  try {
+    return sessionStorage.getItem(fallbackKey(id)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function switchToText(id: string): void {
+  try {
+    sessionStorage.setItem(fallbackKey(id), "1");
+  } catch {
+    // Without storage the reload tries voice again.
+  }
+  window.location.reload(); // reload the turns the voice session saved
+}
+
+/** Voice lines not yet in `turns`; the opening line repeats the last saved turn. */
+function liveLines(lines: LiveLine[], lastText: string | undefined): LiveLine[] {
+  return lines.filter((l, i) => !(i === 0 && l.role === "interviewer" && l.text === lastText));
+}
+
 type InterviewProps = { id: string; view: SessionView; reload: () => Promise<void> };
 
 function Interview({ id, view, reload }: InterviewProps) {
@@ -118,8 +147,15 @@ function Interview({ id, view, reload }: InterviewProps) {
   const lastMiaRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const slowTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [voiceMode] = useState(() => session.mode === "voice" && !readFallback(id));
+  const voice = useVoice(id, voiceMode, () => setEnded({ status: "scoring", limit: false }));
+
+  useEffect(() => {
+    if (voice.error) toast(errorMessage(voice.error, "interview").text);
+  }, [voice.error]);
 
   useEffect(() => composerRef.current?.focus(), []);
+
 
   useEffect(() => {
     const timer = setTimeout(() => writeDraft(id, draft), DRAFT_DELAY_MS);
@@ -222,6 +258,7 @@ function Interview({ id, view, reload }: InterviewProps) {
 
   async function end() {
     setConfirmEnd(false);
+    if (voiceMode && voice.end()) return; // the socket answers with session.ended
     try {
       await apiRequest("POST", `/sessions/${id}/end`);
       abortRef.current?.abort();
@@ -276,6 +313,20 @@ function Interview({ id, view, reload }: InterviewProps) {
             )}
           </Fragment>
         ))}
+        {liveLines(voice.lines, turns[last]?.interviewer_text).map((l) =>
+          l.final ? (
+            <TranscriptTurn
+              key={l.id}
+              variant={l.role === "interviewer" ? "mia" : "candidate"}
+              persona={session.persona}
+              text={l.text}
+            />
+          ) : (
+            <p key={l.id} className="text-answer italic text-muted-foreground">
+              {l.text}
+            </p>
+          ),
+        )}
         {sending && <TypingIndicator slow={slow} onResend={() => pending && void send(pending.text)} />}
       </div>
       {ended ? (
@@ -290,6 +341,16 @@ function Interview({ id, view, reload }: InterviewProps) {
             sessionId={id}
             pollError={pollError || offline}
             onRetry={() => setPollError(false)}
+          />
+        </Footer>
+      ) : voiceMode ? (
+        <Footer>
+          <VoiceBar
+            status={voice.status}
+            muted={voice.muted}
+            onToggleMute={voice.toggleMute}
+            onTextFallback={() => switchToText(id)}
+            onRetry={voice.retry}
           />
         </Footer>
       ) : (
