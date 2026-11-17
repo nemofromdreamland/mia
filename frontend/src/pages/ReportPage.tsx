@@ -45,17 +45,17 @@ export function ReportPage() {
           <Scoring id={id} onCompleted={(data) => setView({ state: "ready", view: data })} />
         )}
         {view.state === "ready" && view.view.session.status === "completed" && (
-          <ReportLoader id={id} session={view.view.session} />
+          <ReportLoader id={id} session={view.view.session} onInvalidState={reload} />
         )}
       </main>
     </>
   );
 }
 
-function LoadError({ onRetry }: { onRetry: () => void }) {
+function LoadError({ onRetry, text = LOAD_ERROR }: { onRetry: () => void; text?: string }) {
   return (
     <InlineNotice variant="danger" action={{ label: "Tentar de novo", onClick: onRetry }}>
-      {LOAD_ERROR}
+      {text}
     </InlineNotice>
   );
 }
@@ -103,9 +103,11 @@ function Scoring({ id, onCompleted }: { id: string; onCompleted: (view: SessionV
   );
 }
 
-type Loaded = { state: "loading" } | { state: "error" } | { state: "ready"; data: ReportView; sessions: Session[] };
+type Loaded = { state: "loading" } | { state: "error"; text?: string } | { state: "ready"; data: ReportView; sessions: Session[] };
 
-function ReportLoader({ id, session }: { id: string; session: Session }) {
+type ReportLoaderProps = { id: string; session: Session; onInvalidState: () => Promise<void> };
+
+function ReportLoader({ id, session, onInvalidState }: ReportLoaderProps) {
   const [load, setLoad] = useState<Loaded>({ state: "loading" });
 
   const fetchAll = useCallback(async () => {
@@ -116,17 +118,26 @@ function ReportLoader({ id, session }: { id: string; session: Session }) {
         apiRequest<Session[]>("GET", "/sessions").catch(() => [] as Session[]),
       ]);
       setLoad({ state: "ready", data, sessions });
-    } catch {
-      setLoad({ state: "error" });
+    } catch (err) {
+      const error = err instanceof ApiError ? err : new ApiError("internal", true, null);
+      if (error.code === "invalid_state") {
+        // Design 10.1: toast, then get_session + routeForStatus (done by the session view).
+        toast(errorMessage(error, "session_screen").text);
+        void onInvalidState();
+        return;
+      }
+      // Design 10.1: llm_invalid_output has its own text; the rest keeps the 6.6 load error.
+      const text = error.code === "llm_invalid_output" ? errorMessage(error, "session_screen").text : undefined;
+      setLoad({ state: "error", text });
     }
-  }, [id]);
+  }, [id, onInvalidState]);
 
   useEffect(() => {
     void fetchAll();
   }, [fetchAll]);
 
   if (load.state === "loading") return <ReportSkeleton />;
-  if (load.state === "error") return <LoadError onRetry={fetchAll} />;
+  if (load.state === "error") return <LoadError onRetry={fetchAll} text={load.text} />;
   return <ReportBody session={session} data={load.data} previous={previousAttempt(load.sessions, session)} />;
 }
 

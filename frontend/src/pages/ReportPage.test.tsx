@@ -113,3 +113,39 @@ describe("ReportPage — main sections", () => {
     expect(await screen.findByRole("heading", { name: "Simulação não encontrada" })).toBeInTheDocument();
   });
 });
+
+describe("ReportPage — states from App Flow (3.7)", () => {
+  it("explains llm_invalid_output and retries get_report (R6)", async () => {
+    let fail = true;
+    const { calls } = mockApi({
+      "GET /sessions/s1": completedView(),
+      "GET /sessions/s1/report": () =>
+        fail ? apiErr(502, "llm_invalid_output", true) : json(200, makeReportView()),
+      "GET /sessions": [],
+    });
+    renderReport();
+    expect(await screen.findByText("Não foi possível gerar a resposta da MIA. Tente de novo.")).toBeInTheDocument();
+    expect(screen.queryByText("Não foi possível carregar o feedback.")).not.toBeInTheDocument();
+    fail = false;
+    await userEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    expect(await screen.findByTestId("overall-score")).toBeInTheDocument();
+    expect(calls.filter((c) => c.path === "/sessions/s1/report")).toHaveLength(2);
+  });
+
+  it("refreshes the session and follows its status on invalid_state (R9)", async () => {
+    let status = "completed";
+    mockApi({
+      "GET /sessions/s1": () =>
+        json(200, status === "completed" ? completedView() : makeView({}, { status: "in_progress" })),
+      "GET /sessions/s1/report": () => {
+        status = "in_progress";
+        return apiErr(409, "invalid_state");
+      },
+      "GET /sessions": [],
+    });
+    const router = renderReport();
+    expect(await screen.findByText("Esta simulação mudou de etapa. Atualizando…")).toBeInTheDocument();
+    await waitFor(() => expect(router.state.location.pathname).toBe("/sessao/s1/entrevista"));
+  });
+});
+

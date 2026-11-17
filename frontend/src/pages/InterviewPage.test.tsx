@@ -239,6 +239,29 @@ describe("InterviewPage — states from App Flow (3.7)", () => {
     await waitFor(() => expect(calls.filter((c) => c.path === "/sessions/s1/end")).toHaveLength(2));
   });
 
+  it("shows internal without retry when it is not retryable (R8)", async () => {
+    mockApi({ "GET /sessions/s1": interviewView(), "POST /sessions/s1/end": apiErr(500, "internal", false) });
+    renderInterview();
+    await readyInput();
+    await userEvent.click(screen.getByTestId("end-interview"));
+    await userEvent.click(await screen.findByTestId("confirm-end"));
+    expect(await screen.findByText("Algo deu errado do nosso lado. Tente de novo.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tentar de novo" })).not.toBeInTheDocument();
+  });
+
+  it("uses the internal message for an unknown code and hides the raw one (R10)", async () => {
+    mockApi({
+      "GET /sessions/s1": interviewView(),
+      "POST /sessions/s1/end": json(500, { error: { code: "weird_code", message: "raw backend text", retryable: false } }),
+    });
+    renderInterview();
+    await readyInput();
+    await userEvent.click(screen.getByTestId("end-interview"));
+    await userEvent.click(await screen.findByTestId("confirm-end"));
+    expect(await screen.findByText("Algo deu errado do nosso lado. Tente de novo.")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/weird_code|raw backend text/);
+  });
+
   it("refreshes and follows the status on invalid_state (R9)", async () => {
     let status = "in_progress";
     mockApi({
