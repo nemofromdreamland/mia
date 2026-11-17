@@ -17,10 +17,6 @@ function RecruiterScreen({ title, tab }: ScreenProps) {
   );
 }
 
-export function RecruiterPage() {
-  return <RecruiterScreen title="Candidatos acima da média" tab="Candidatos" />;
-}
-
 export function CandidatePage() {
   return <RecruiterScreen title="Candidato" tab="Candidato" />;
 }
