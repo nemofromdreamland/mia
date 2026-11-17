@@ -229,7 +229,9 @@ function Interview({ id, view, reload }: InterviewProps) {
       setEnded({ status: "scoring", limit: false });
     } catch (err) {
       const error = err instanceof ApiError ? err : new ApiError("internal", true, null);
-      toast(errorMessage(error, "interview").text);
+      const shown = errorMessage(error, "interview");
+      // Design 10.1: "Tentar de novo" repeats the same operation when it can succeed.
+      toast(shown.text, shown.retry ? { action: { label: "Tentar de novo", onClick: () => void end() } } : undefined);
       if (error.code === "invalid_state") void reload();
     }
   }
