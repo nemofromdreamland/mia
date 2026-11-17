@@ -18,8 +18,8 @@ resource "aws_lambda_function" "proxy" {
 
   environment {
     variables = {
-      AGENT_RUNTIME_ARN       = var.agent_runtime_arn
-      AGENT_RUNTIME_QUALIFIER = "DEFAULT"
+      AGENT_RUNTIME_ARN       = aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn
+      AGENT_RUNTIME_QUALIFIER = aws_bedrockagentcore_agent_runtime_endpoint.live.name
     }
   }
 

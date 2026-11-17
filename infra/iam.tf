@@ -171,10 +171,9 @@ data "aws_iam_policy_document" "proxy" {
   statement {
     sid     = "InvokeRuntime"
     actions = ["bedrock-agentcore:InvokeAgentRuntime"]
-    # The runtime ARN only exists in task 4.5, which may narrow this.
     resources = [
-      "${local.region_arn_prefix}:runtime/mia*",
-      "${local.region_arn_prefix}:runtime/mia*/runtime-endpoint/*",
+      aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn,
+      "${aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn}/runtime-endpoint/*",
     ]
   }
 

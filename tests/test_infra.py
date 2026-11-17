@@ -243,8 +243,6 @@ def test_proxy_lambda() -> None:
         "timeout = 30",
         "memory_size = 256",
         "role = aws_iam_role.proxy.arn",
-        "AGENT_RUNTIME_ARN = var.agent_runtime_arn",
-        'AGENT_RUNTIME_QUALIFIER = "DEFAULT"',
         'filebase64sha256("${path.module}/../build/proxy.zip")',
     ):
         assert expected in block
@@ -385,3 +383,20 @@ def test_only_the_proxy_may_invoke() -> None:
     assert policy.count("aws_iam_role.proxy.arn") >= 2
     attach = squash(resource_block("aws_bedrockagentcore_resource_policy", "runtime"))
     assert "aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn" in attach
+
+
+def test_proxy_points_to_the_live_endpoint() -> None:
+    block = squash(resource_block("aws_lambda_function", "proxy"))
+    assert (
+        "AGENT_RUNTIME_ARN = aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn" in block
+    )
+    assert (
+        "AGENT_RUNTIME_QUALIFIER = aws_bedrockagentcore_agent_runtime_endpoint.live.name" in block
+    )
+    assert "agent_runtime_arn" not in squash((INFRA / "variables.tf").read_text(encoding="utf-8"))
+
+
+def test_proxy_policy_scoped_to_the_runtime() -> None:
+    proxy = squash(resource_block("aws_iam_policy_document", "proxy", keyword="data"))
+    assert "runtime/mia*" not in proxy
+    assert "aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn" in proxy
