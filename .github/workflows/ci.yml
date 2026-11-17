@@ -1,5 +1,8 @@
 name: CI
 
+# Task 4.8: four visible checks on every PR. No secrets, no AWS credentials, no model calls
+# (the AWS account closes on 2026-11-17, so `terraform plan` and the OIDC deploy are out).
+
 on:
   push:
     branches: [main]
@@ -14,7 +17,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  lint:
+    name: Lint (Ruff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install Python 3.12 and dependencies
+        run: |
+          uv python install 3.12
+          uv sync
+      - name: Ruff check
+        run: uv run ruff check .
+      - name: Ruff format
+        run: uv run ruff format --check .
+
+  tests:
+    name: Tests (pytest)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -26,7 +48,40 @@ jobs:
         run: |
           uv python install 3.12
           uv sync
-      - name: Lint
-        run: uv run ruff check .
       - name: Tests (no secrets, no model calls)
         run: uv run pytest --durations=10
+
+  eval-quick:
+    name: Eval rápido (conjunto A, respostas gravadas)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install Python 3.12 and dependencies
+        run: |
+          uv python install 3.12
+          uv sync
+      - name: Replay the recorded judge answers (task 2.10)
+        run: uv run pytest tests/test_eval_regression.py -v --no-cov
+
+  terraform:
+    name: Terraform (fmt + validate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.17"
+      - name: Format
+        run: terraform fmt -check -recursive
+      - name: Init without backend or credentials
+        run: terraform init -backend=false -input=false
+      - name: Validate
+        run: terraform validate
