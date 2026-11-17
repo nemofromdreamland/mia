@@ -7,4 +7,4 @@ language: pt-BR
 blurb: "SaaS B2B procura quem priorize, alinhe stakeholders e meça o sucesso de funcionalidades de IA."
 candidate_blurb: "Você é Diego, product manager que já lançou funcionalidades de IA em um SaaS de atendimento."
 estimated_minutes: 6
-version: 2               # sobe quando cv, vaga ou plano mudam
+version: 3               # sobe quando cv, vaga ou plano mudam

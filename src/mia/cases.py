@@ -9,7 +9,7 @@ import yaml
 from pydantic import BaseModel, ValidationError
 
 from mia.prep_graph import PrepResult, check_plan_coverage
-from mia.schemas import Case, InterviewPlan, Screening
+from mia.schemas import Case, CaseExamples, InterviewPlan, Screening
 
 CASES_DIR: Final[Path] = Path(__file__).resolve().parent.parent.parent / "cases"
 _CASE_ID = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -79,6 +79,18 @@ def load_case(case_id: str, cases_dir: Path = CASES_DIR) -> LoadedCase:
     if problems:
         raise CaseError(f"{case_id}: plano inconsistente: " + "; ".join(problems))
     return LoadedCase(case=case, screening=screening, plan=plan)
+
+
+EXAMPLES_FILE = "examples.json"
+
+
+def load_examples(case_id: str, cases_dir: Path = CASES_DIR) -> CaseExamples:
+    """Pre-generated strong/weak answers (spec 5.6); no model is called at runtime."""
+    folder = _case_dir(case_id, cases_dir)
+    examples = _parse_json(folder, EXAMPLES_FILE, CaseExamples)
+    if examples.case_id != case_id:
+        raise CaseError(f"{case_id}: {EXAMPLES_FILE} diz case_id {examples.case_id!r}")
+    return examples
 
 
 def load_case_texts(case_id: str, cases_dir: Path = CASES_DIR) -> tuple[str, str]:

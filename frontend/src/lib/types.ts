@@ -107,7 +107,15 @@ export type Report = {
   improvements: Improvement[];
 };
 
-export type ReportView = { report: Report; turns: Turn[]; is_above_case_avg: boolean | null };
+export type ReportView = {
+  report: Report;
+  turns: Turn[];
+  is_above_case_avg: boolean | null;
+  examples_seen?: boolean;
+};
+
+/** Spec 5.6: strong/weak example answers for the current question. */
+export type ExamplesView = { question_id: string; turn_no: number; strong: string; weak: string };
 
 export type CaseStats = { case_id: string; completed_sessions: number; average_score: number | null };
 
@@ -140,4 +148,5 @@ export type RecruiterCandidate = {
   summary: CandidateSummary;
   report: Report;
   turns: Turn[];
+  examples_seen?: boolean;
 };

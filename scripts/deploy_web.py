@@ -77,7 +77,8 @@ def main(argv: Sequence[str] | None = None, run: Runner = run_command) -> int:
     args = parser.parse_args(argv)
     try:
         out = outputs(run)
-        env = {"VITE_API_BASE_URL": api_base(out["api_url"])}
+        # Voice is live in production (spec 5): shows "Texto | Voz" in the CaseDialog.
+        env = {"VITE_API_BASE_URL": api_base(out["api_url"]), "VITE_VOICE_ENABLED": "true"}
         steps = deploy_commands(out["web_bucket"], out["web_distribution_id"])
         if args.dry_run:
             print(f"VITE_API_BASE_URL={env['VITE_API_BASE_URL']} " + " ".join(build_command()))

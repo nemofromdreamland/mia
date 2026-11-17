@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { InlineNotice } from "@/components/InlineNotice";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,11 @@ import {
 import { ApiError, apiRequest } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { interviewName, levelText } from "@/lib/labels";
-import type { CaseSummary, Session } from "@/lib/types";
+import type { CaseSummary, Mode, Session } from "@/lib/types";
+
+function voiceEnabled(): boolean {
+  return import.meta.env.VITE_VOICE_ENABLED === "true";
+}
 
 type CaseDialogProps = {
   item: CaseSummary | null;
@@ -35,12 +40,17 @@ function blockedText(error: ApiError): string {
 /** Design section 5.31. */
 export function CaseDialog({ item, blocked, onClose, onCreated, onBlocked }: CaseDialogProps) {
   const [creating, setCreating] = useState(false);
+  const [mode, setMode] = useState<Mode>("text");
+  const showMode = voiceEnabled();
 
   async function start() {
     if (!item) return;
     setCreating(true);
     try {
-      const session = await apiRequest<Session>("POST", "/sessions", { case_id: item.case_id, mode: "text" });
+      const session = await apiRequest<Session>("POST", "/sessions", {
+        case_id: item.case_id,
+        mode: showMode ? mode : "text",
+      });
       onCreated(session);
     } catch (err) {
       const error = err instanceof ApiError ? err : new ApiError("internal", true, null);
@@ -63,18 +73,33 @@ export function CaseDialog({ item, blocked, onClose, onCreated, onBlocked }: Cas
                 {item.estimated_minutes} min
               </DialogDescription>
             </DialogHeader>
-            <section className="flex flex-col gap-2">
-              <h3 className="label text-muted-foreground">A vaga</h3>
-              <p className="text-body">{item.blurb}</p>
-            </section>
-            <section className="flex flex-col gap-2">
-              <h3 className="label text-muted-foreground">Você vai interpretar</h3>
-              <p className="text-body text-foreground-soft">{item.candidate_blurb}</p>
-            </section>
-            <InlineNotice variant="neutral">
-              Suas respostas ficam anônimas e podem aparecer na tela do recrutador desta demo. Não escreva
-              dados pessoais.
-            </InlineNotice>
+            <Clamp label="A vaga" text={item.blurb} />
+            <Clamp label="Você vai interpretar" text={item.candidate_blurb} soft />
+            {showMode && (
+              <section className="flex flex-col gap-2">
+                <h3 id="mode-label" className="label text-muted-foreground">
+                  Formato
+                </h3>
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  aria-labelledby="mode-label"
+                  value={mode}
+                  onValueChange={(value) => value && setMode(value as Mode)}
+                  className="w-full"
+                >
+                  <ToggleGroupItem value="text" data-testid="mode-text" className="flex-1 data-[state=on]:border-mia data-[state=on]:bg-mia-muted data-[state=on]:text-mia">
+                    Texto
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="voice" data-testid="mode-voice" className="flex-1 data-[state=on]:border-mia data-[state=on]:bg-mia-muted data-[state=on]:text-mia">
+                    Voz
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </section>
+            )}
+            <p className="text-small text-muted-foreground">
+              Respostas anônimas, visíveis ao recrutador da demo. Não use dados pessoais.
+            </p>
             {blocked && <InlineNotice variant="warning">{blockedText(blocked)}</InlineNotice>}
             <DialogFooter>
               <Button variant="outline" onClick={onClose}>
@@ -94,5 +119,21 @@ export function CaseDialog({ item, blocked, onClose, onCreated, onBlocked }: Cas
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Spec 5.6: at most 2 lines, with "Ver mais" to expand. */
+function Clamp({ label, text, soft = false }: { label: string; text: string; soft?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="flex flex-col gap-1">
+      <h3 className="label text-muted-foreground">{label}</h3>
+      <p className={`text-body ${soft ? "text-foreground-soft" : ""} ${open ? "" : "line-clamp-2"}`}>{text}</p>
+      {text.length > 120 && (
+        <Button variant="link" size="sm" className="h-auto self-start p-0" onClick={() => setOpen((o) => !o)}>
+          {open ? "Ver menos" : "Ver mais"}
+        </Button>
+      )}
+    </section>
   );
 }

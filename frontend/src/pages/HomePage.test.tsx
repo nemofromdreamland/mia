@@ -72,6 +72,36 @@ describe("HomePage — cases", () => {
     });
   });
 
+  it("lets the visitor pick voice when VITE_VOICE_ENABLED=true", async () => {
+    vi.stubEnv("VITE_VOICE_ENABLED", "true");
+    const { calls } = mockApi({
+      "GET /cases": CASES,
+      "GET /sessions": [],
+      "POST /sessions": json(201, makeSession({ session_id: "new1" })),
+    });
+    renderHome();
+    await userEvent.click(await screen.findByTestId("case-card-prompt-engineer-jr"));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Formato")).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByTestId("mode-voice"));
+    expect(within(dialog).getByTestId("mode-voice")).toHaveClass("data-[state=on]:bg-mia-muted");
+    expect(within(dialog).getByTestId("mode-voice")).toHaveAttribute("data-state", "on");
+    await userEvent.click(within(dialog).getByTestId("start-case"));
+    await waitFor(() => expect(calls.find((c) => c.method === "POST")?.body).toEqual({
+      case_id: "prompt-engineer-jr",
+      mode: "voice",
+    }));
+    vi.unstubAllEnvs();
+  });
+
+  it("hides the format choice without the flag", async () => {
+    mockApi({ "GET /cases": CASES, "GET /sessions": [] });
+    renderHome();
+    await userEvent.click(await screen.findByTestId("case-card-prompt-engineer-jr"));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByText("Formato")).not.toBeInTheDocument();
+  });
+
   it("opens the dialog from ?caso=", async () => {
     mockApi({ "GET /cases": CASES, "GET /sessions": [] });
     renderHome("/?caso=backend-python-jr");

@@ -10,10 +10,10 @@ import os
 import re
 import time
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, cast, get_args
+from typing import Any, Literal, Protocol, cast, get_args
 from urllib.parse import quote, quote_plus
 
 import yaml
@@ -23,7 +23,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langchain_core.runnables.retry import ExponentialJitterParams
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError
 
-from mia.schemas import RunRecord
+from mia.schemas import RunRecord, VoiceConfig
 
 Provider = Literal["bedrock", "gemini", "groq"]
 RecordObserver = Callable[[RunRecord, Path], None]
@@ -560,3 +560,122 @@ def invoke_structured[T: BaseModel](
         on_record=on_record,
     )
     return parsed
+
+
+# ---------- Voice: Nova 2 Sonic bidirectional stream (spec 5) ----------
+
+DEFAULT_VOICE_PATH = REPO_ROOT / "config" / "voice.yaml"
+VOICE_ID_ENV = "MIA_VOICE_ID"
+
+
+class SonicStream(Protocol):
+    """Raw Sonic event stream: JSON events in, JSON events out. Protocol logic lives in
+    mia.voice.sonic; this is only transport, so tests replace it with a fake."""
+
+    async def send(self, event: dict[str, Any]) -> None: ...
+
+    async def receive(self) -> dict[str, Any] | None: ...  # None = stream ended
+
+    async def close(self) -> None: ...
+
+
+def load_voice_config(
+    path: Path = DEFAULT_VOICE_PATH, env: Mapping[str, str] | None = None
+) -> VoiceConfig:
+    """Read config/voice.yaml; MIA_VOICE_ID overrides the voice."""
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    voice_id = (os.environ if env is None else env).get(VOICE_ID_ENV)
+    if voice_id:
+        raw["voice_id"] = voice_id
+    return VoiceConfig.model_validate(raw)
+
+
+class _BedrockSonicStream:
+    """SonicStream over aws-sdk-bedrock-runtime (InvokeModelWithBidirectionalStream)."""
+
+    def __init__(self, stream: Any) -> None:
+        self._stream = stream
+        self._closed = False
+
+    async def send(self, event: dict[str, Any]) -> None:
+        from aws_sdk_bedrock_runtime.models import (
+            BidirectionalInputPayloadPart,
+            InvokeModelWithBidirectionalStreamInputChunk,
+        )
+
+        data = json.dumps(event, ensure_ascii=False).encode("utf-8")
+        chunk = InvokeModelWithBidirectionalStreamInputChunk(
+            value=BidirectionalInputPayloadPart(bytes_=data)
+        )
+        await self._stream.input_stream.send(chunk)
+
+    async def receive(self) -> dict[str, Any] | None:
+        while True:
+            output = await self._stream.await_output()
+            result = await output[1].receive()
+            if result is None:
+                return None
+            if result.value and result.value.bytes_:
+                parsed: dict[str, Any] = json.loads(result.value.bytes_.decode("utf-8"))
+                return parsed
+
+    async def close(self) -> None:
+        if not self._closed:
+            self._closed = True
+            await self._stream.input_stream.close()
+
+
+async def open_sonic_stream(config: VoiceConfig) -> SonicStream:
+    """Open the bidirectional stream; credentials come from the default AWS chain."""
+    from aws_sdk_bedrock_runtime.client import InvokeModelWithBidirectionalStreamOperationInput
+    from langchain_aws.utils import create_aws_bedrock_runtime_client
+
+    client = create_aws_bedrock_runtime_client(region_name=config.region)
+    stream = await client.invoke_model_with_bidirectional_stream(
+        InvokeModelWithBidirectionalStreamOperationInput(model_id=config.model_id)
+    )
+    return _BedrockSonicStream(stream)
+
+
+def record_voice_run(
+    *,
+    config: VoiceConfig,
+    prompt_name: str,
+    prompt_version: int,
+    session_id: str | None,
+    transcript: list[dict[str, str]],
+    first_audio_ms: int | None,
+    duration_ms: int,
+    input_tokens: int,
+    output_tokens: int,
+    error: str | None,
+    runs_dir: Path = DEFAULT_RUNS_DIR,
+    models: ModelsConfig | None = None,
+) -> Path:
+    """One RunRecord per voice session. Never audio: only masked transcripts and metrics."""
+    ref = f"bedrock:{config.model_id}"
+    catalog = models or load_models_config()
+    spec = catalog.models.get(ref)
+    record = RunRecord(
+        run_id=uuid.uuid4().hex,
+        experiment=None,
+        session_id=session_id,
+        prompt_name=prompt_name,
+        prompt_version=prompt_version,
+        provider="bedrock",
+        model=config.model_id,
+        params={"voice_id": config.voice_id, "first_audio_ms": first_audio_ms},
+        input_hash=hash_input(prompt_name, json.dumps(transcript, ensure_ascii=False)),
+        input={"transcript": transcript},
+        output_raw="",
+        output_parsed=None,
+        json_valid_first_try=None,
+        repaired=None,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        latency_ms=duration_ms,
+        cost_usd=estimate_cost(spec, input_tokens, output_tokens) if spec else 0.0,
+        error=redact_secrets(error) if error else None,
+        created_at=datetime.now(UTC),
+    )
+    return append_run_record(record, runs_dir)

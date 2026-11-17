@@ -1,0 +1,65 @@
+# Accepted findings of scripts/audit_public.py (task 6.4).
+# Each rule: kind, value (regex on the raw value), path (glob), reason.
+# Keep it narrow: a rule must never cover a real secret or real personal data.
+
+# Fictitious contact data used by PII tests, fixtures and eval datasets.
+- kind: email
+  value: '@(example\.com|exemplo\.com(\.br)?|ex\.com|ex\.io|b\.com|y\.com)$'
+  path: '*'
+  reason: reserved or fake domains in fictitious CVs and tests
+- kind: cpf
+  value: '^(000\.000\.000-00|123\.456\.789-09|987\.654\.321-00)$'
+  path: '*'
+  reason: well-known fake CPFs used to test pii.py
+- kind: phone
+  value: '.*'
+  path: 'evals/*'
+  reason: fictitious phone numbers in eval datasets
+- kind: phone
+  value: '.*'
+  path: 'tests/*'
+  reason: fictitious phone numbers in tests
+- kind: phone
+  value: '.*'
+  path: 'specs/*'
+  reason: fictitious phone numbers quoted in PII specs
+# Fake AWS identifiers in tests and specs (123456789012, 000000000000, ...).
+- kind: aws_account
+  value: '(123456789012|000000000000|111111111111|222222222222)'
+  path: '*'
+  reason: placeholder account IDs
+# Real AWS identifiers of the demo account: masked in HEAD, kept in history.
+- kind: aws_account
+  value: '.*'
+  path: 'specs/4.*'
+  reason: demo AWS account closed on 2026-11-17; masked in HEAD, accepted in git history
+- kind: api_gateway
+  value: '.*'
+  path: 'specs/4.*'
+  reason: API Gateway of the closed demo account; masked in HEAD, accepted in git history
+- kind: cloudfront
+  value: '.*'
+  path: 'specs/4.*'
+  reason: CloudFront distribution of the closed demo account; masked in HEAD, accepted in history
+# The repository owner's public GitHub handle in links to this same repo.
+- kind: identity
+  value: '.*'
+  path: 'specs/0.4-repo-skeleton.md'
+  reason: public GitHub handle in a link to this repository
+- kind: identity
+  value: '.*'
+  path: 'specs/2.10-evidence.md'
+  reason: public GitHub handle in a link to this repository's Actions runs
+- kind: identity
+  value: '.*'
+  path: 'specs/4.8-evidence.md'
+  reason: public GitHub handle in a link to this repository's Actions runs
+# Self-test samples: the auditor's own tests and spec must contain what it detects.
+- kind: '*'
+  value: '.*'
+  path: 'tests/test_audit_public.py'
+  reason: synthetic samples that exercise every detector
+- kind: '*'
+  value: '.*'
+  path: 'specs/6.4-public-docs.md'
+  reason: synthetic samples quoted in the test plan of this spec

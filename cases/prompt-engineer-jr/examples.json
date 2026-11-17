@@ -1,0 +1,21 @@
+{
+  "case_id": "prompt-engineer-jr",
+  "generated_by": "synthetic_candidate@v4 groq:openai/gpt-oss-120b",
+  "examples": [
+    {
+      "question_id": "q1",
+      "strong": "Foi desafiador, mas aprendi rápido. No TCC, usei LangChain e um banco vetorial local para criar um chatbot que respondia dúvidas sobre regulamentos a partir de 60 PDFs. Quando me deparei com funções de chunking ou parâmetros de consulta que desconhecia, consultei a documentação oficial, participei de fóruns e experimentei variações de prompt até obter respostas corretas. O assistente alcançou respostas corretas em ~85 % das perguntas testadas.",
+      "weak": "Foi um aprendizado prático; estudei a documentação, experimentei exemplos e busquei ajuda em fóruns e com colegas sempre que surgia alguma dúvida."
+    },
+    {
+      "question_id": "q3",
+      "strong": "Para comparar as duas versões, criei um conjunto de 20 perguntas reais do cliente, randomizei a ordem e fiz chamadas simultâneas usando cada prompt. Usei o LangChain para registrar a resposta, a citação do trecho e o tempo de geração. Em seguida, pedi a três revisores (incluindo o cliente) que avaliassem relevância e correção em escala 1‑5. A versão B obteve 4,6 vs 3,9, reduziu respostas sem fonte em 30 % e manteve o mesmo tempo de latência, o que convenceu o cliente.",
+      "weak": "Eu faria um teste A/B, enviando um conjunto representativo de perguntas para cada versão, revisando manualmente as respostas e mostrando exemplos ao cliente, explicando as diferenças observadas e o motivo da escolha."
+    },
+    {
+      "question_id": "q5",
+      "strong": "Eu diria que 85 % de acerto significa que, em 85 de cada 100 interações, o modelo fornece a resposta correta, o que já supera o que teríamos sem ajuste – por exemplo, no meu chatbot de dúvidas acadêmicas, respostas aleatórias ficariam em torno de 20 %. Esse nível reduz significativamente a necessidade de revisão humana, mas ainda deixa 15 % de erros que podem gerar frustração; portanto, é um bom ponto de partida, mas devemos continuar refinando o prompt para melhorar ainda mais.",
+      "weak": "Eu diria que 85 % é razoável, comparado às expectativas, mas depende do contexto e da tolerância ao erro; explico que ainda há margem para melhorar."
+    }
+  ]
+}

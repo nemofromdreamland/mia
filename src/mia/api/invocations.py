@@ -23,6 +23,8 @@ Action = Literal[
     "delete_session",
     "list_recruiter_candidates",
     "get_recruiter_candidate",
+    "authorize_voice",
+    "get_examples",
 ]
 
 router = APIRouter()
@@ -41,6 +43,8 @@ NEEDS_SESSION: frozenset[str] = frozenset(
         "get_report",
         "delete_session",
         "get_recruiter_candidate",
+        "authorize_voice",
+        "get_examples",
     }
 )
 
@@ -86,6 +90,8 @@ def _run(deps: ServiceDeps, req: InvocationRequest, visitor: str, session: str) 
         "get_recruiter_candidate": lambda: build_response(
             200, service.get_recruiter_candidate(deps, session)
         ),
+        "authorize_voice": lambda: _authorize_voice(deps, visitor, session),
+        "get_examples": lambda: build_response(200, service.get_examples(deps, visitor, session)),
     }
     return handlers[req.action]()
 
@@ -98,6 +104,11 @@ def _create(deps: ServiceDeps, req: InvocationRequest, visitor: str) -> Response
 def _answer(deps: ServiceDeps, req: InvocationRequest, visitor: str, session: str) -> Response:
     body = _parse_payload(AnswerBody, req.payload)
     return build_response(200, service.send_answer(deps, visitor, session, body.answer_text))
+
+
+def _authorize_voice(deps: ServiceDeps, visitor: str, session: str) -> Response:
+    service.authorize_voice(deps, visitor, session)
+    return build_response(200, {"authorized": True})
 
 
 def _delete(deps: ServiceDeps, visitor: str, session: str) -> Response:

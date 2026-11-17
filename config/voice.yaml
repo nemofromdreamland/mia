@@ -1,0 +1,8 @@
+# Voice interview (spec 5): Amazon Nova 2 Sonic over Bedrock bidirectional streaming.
+# voice_id "carolina" is the Nova 2 Sonic pt-BR feminine voice; MIA_VOICE_ID overrides it.
+model_id: "amazon.nova-2-sonic-v1:0"
+region: "us-east-1"
+voice_id: "carolina"
+input_sample_rate: 16000   # browser -> Sonic: PCM 16-bit mono
+output_sample_rate: 24000  # Sonic -> browser: PCM 16-bit mono
+max_chunk_bytes: 4096      # decoded audio.chunk limit (AgentCore frames stay far below 32 KB)

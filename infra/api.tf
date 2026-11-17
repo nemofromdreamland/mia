@@ -36,6 +36,8 @@ resource "aws_apigatewayv2_route" "proxy" {
     "DELETE /sessions/{id}",
     "GET /recruiter/candidates",
     "GET /recruiter/candidates/{id}",
+    "POST /sessions/{id}/voice-url",
+    "GET /sessions/{id}/examples",
   ])
 
   api_id    = aws_apigatewayv2_api.http.id

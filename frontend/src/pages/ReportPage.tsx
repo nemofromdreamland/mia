@@ -182,6 +182,9 @@ function ReportBody({ session, data, previous }: ReportBodyProps) {
           )}
         </div>
         {data.is_above_case_avg === true && <AboveAverageNote sessionId={session.session_id} />}
+        {data.examples_seen && (
+          <p className="text-small text-muted-foreground">Sugestões de resposta vistas nesta simulação.</p>
+        )}
       </section>
 
       <section className="flex flex-col gap-6">

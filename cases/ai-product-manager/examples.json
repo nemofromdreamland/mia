@@ -1,0 +1,21 @@
+{
+  "case_id": "ai-product-manager",
+  "generated_by": "synthetic_candidate@v4 groq:openai/gpt-oss-120b",
+  "examples": [
+    {
+      "question_id": "q1",
+      "strong": "O maior desafio foi quando lançamos o assistente de IA que sugeria respostas. O modelo gerava respostas fora do tom ou incompletas, o que impactava a confiança dos atendentes. Implementei um ciclo rápido de teste A/B, envolvi o time de dados para refinar o treinamento com dados reais de clientes e criei um painel de monitoramento de qualidade. Após duas iterações, a taxa de aceitação das sugestões subiu para 85 % e recebemos elogios nas reuniões comerciais.",
+      "weak": "O maior desafio foi lidar com a imprevisibilidade do modelo, alinhar expectativas das áreas e ajustar o roadmap quando a IA não entregava o esperado, exigindo iterações rápidas e muita comunicação."
+    },
+    {
+      "question_id": "q3",
+      "strong": "Primeiro verifico métricas de precisão, recall e F1 em um conjunto de teste representativo; depois rodo um piloto controlado com clientes estratégicos e registro a taxa de aceitação e o tempo de resposta. No último lançamento do assistente de IA na Zeladoria Digital, atingimos F1 = 0,87, 92 % de aprovação no piloto e reduzimos o tempo de classificação de tickets em 30 %, o que consideramos critério suficiente para produção.",
+      "weak": "Eu verifico se o modelo entrega precisão aceitável nas métricas de recall e precisão, faço testes com casos reais, analiso feedback de usuários e revisões jurídicas, e confirmo que o risco está dentro dos limites definidos."
+    },
+    {
+      "question_id": "q5",
+      "strong": "Em 2023, durante entrevistas, um cliente pediu a integração do chat com redes sociais específicas. Avaliei o esforço (2 sprints, 4 devs) versus benefício (1 empresa, baixo volume). Concluí que não justificava o custo e priorizaria a classificação automática de chamados. Expliquei ao cliente em uma reunião, apresentando a análise de ROI e sugerindo usar a API padrão já disponível, que atendeu à maioria das necessidades.",
+      "weak": "Em uma entrevista, o cliente reclamou de um ajuste estético que não impactava a eficiência. Avaliei o custo‑benefício e, com o time, decidi não priorizar, comunicando de forma clara que focaríamos nas funcionalidades críticas."
+    }
+  ]
+}

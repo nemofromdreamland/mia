@@ -83,6 +83,13 @@ data "aws_iam_policy_document" "runtime" {
     )
   }
 
+  # Voice (spec 5): Nova 2 Sonic bidirectional streaming, us-east-1 foundation model.
+  statement {
+    sid       = "VoiceModel"
+    actions   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithBidirectionalStream"]
+    resources = ["arn:aws:bedrock:${var.region}::foundation-model/amazon.nova-2-sonic-v1:0"]
+  }
+
   statement {
     sid       = "Guardrails"
     actions   = ["bedrock:ApplyGuardrail"]
@@ -169,8 +176,12 @@ resource "aws_iam_role" "proxy" {
 
 data "aws_iam_policy_document" "proxy" {
   statement {
-    sid     = "InvokeRuntime"
-    actions = ["bedrock-agentcore:InvokeAgentRuntime"]
+    sid = "InvokeRuntime"
+    # WebSocketStream: the presigned voice URL is signed with this role (spec 5).
+    actions = [
+      "bedrock-agentcore:InvokeAgentRuntime",
+      "bedrock-agentcore:InvokeAgentRuntimeWithWebSocketStream",
+    ]
     resources = [
       aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn,
       "${aws_bedrockagentcore_agent_runtime.backend.agent_runtime_arn}/runtime-endpoint/*",

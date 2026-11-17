@@ -294,3 +294,85 @@ def test_lambda_handler_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["statusCode"] == 200
     assert client.calls[0]["agentRuntimeArn"] == ARN
     assert client.calls[0]["qualifier"] == "DEFAULT"
+
+
+# ---------- voice-url (spec 5) ----------
+
+from urllib.parse import parse_qs, urlparse  # noqa: E402
+
+from botocore.credentials import Credentials  # noqa: E402
+
+from proxy.handler import build_voice_url  # noqa: E402
+
+CREDS = Credentials("AKIDEXAMPLE", "secret-example", "token-example")
+
+
+def fake_signer(arn: str, qualifier: str, runtime_session: str, visitor: str) -> str:
+    return build_voice_url(arn, qualifier, runtime_session, visitor, CREDS, "us-east-1")
+
+
+def voice_event(visitor: str | None = VISITOR, body: Any = None) -> dict[str, Any]:
+    return event("POST", f"/sessions/{SID}/voice-url", body, visitor=visitor)
+
+
+def test_voice_url_route() -> None:
+    assert match_route("POST", f"/sessions/{SID}/voice-url") == ("voice_url", SID)
+
+
+def test_voice_url_authorizes_then_returns_signed_url() -> None:
+    client = FakeAgentCore(b'{"authorized": true}')
+    result = handle(voice_event(), client, ARN, "live", fake_signer)
+
+    assert sent(client) == {
+        "action": "authorize_voice",
+        "visitor_id": VISITOR,
+        "session_id": SID,
+        "payload": {},
+    }
+    assert client.calls[0]["runtimeSessionId"] == f"mia-visitor-{VISITOR}"
+    assert result["statusCode"] == 200
+    assert result["headers"]["cache-control"] == "no-store"
+    body = json.loads(result["body"])
+    assert set(body) == {"url", "expires_in"} and body["expires_in"] == 300
+    url = urlparse(body["url"])
+    query = parse_qs(url.query)
+    assert url.scheme == "wss" and url.netloc == "bedrock-agentcore.us-east-1.amazonaws.com"
+    assert url.path.endswith("/ws") and "runtime%2Fmia-TEST" in body["url"]
+    assert query["qualifier"] == ["live"]
+    assert query["X-Amzn-Bedrock-AgentCore-Runtime-Custom-X-Visitor-Id"] == [VISITOR]
+    assert query["X-Amzn-Bedrock-AgentCore-Runtime-Session-Id"] == [f"mia-visitor-{VISITOR}"]
+    assert query["X-Amz-Expires"] == ["300"]
+    assert "X-Amz-Signature" in query
+    assert "secret-example" not in body["url"]
+
+
+def test_voice_url_ignores_visitor_in_body() -> None:
+    client = FakeAgentCore(b'{"authorized": true}')
+    handle(voice_event(body={"visitor_id": "x"}), client, ARN, "live", fake_signer)
+    assert sent(client)["visitor_id"] == VISITOR
+
+
+@pytest.mark.parametrize(
+    ("code", "status"), [("not_found", 404), ("invalid_state", 409), ("demo_paused", 503)]
+)
+def test_voice_url_refusals_pass_through_without_url(code: str, status: int) -> None:
+    error = {"error": {"code": code, "message": "m", "retryable": False}}
+    client = FakeAgentCore(json.dumps(error).encode())
+    result = handle(voice_event(), client, ARN, "live", fake_signer)
+    assert result["statusCode"] == status
+    assert "wss://" not in result["body"]
+
+
+def test_voice_url_bad_visitor_never_reaches_agentcore() -> None:
+    client = FakeAgentCore()
+    result = handle(voice_event(visitor="abc"), client, ARN, "live", fake_signer)
+    assert result["statusCode"] == 422 and client.calls == []
+
+
+def test_voice_url_signer_failure_is_generic_internal() -> None:
+    def broken(*args: Any) -> str:
+        raise RuntimeError("no credentials arn:secret")
+
+    result = handle(voice_event(), FakeAgentCore(b"{}"), ARN, "live", broken)
+    assert result["statusCode"] == 500
+    assert "arn" not in result["body"]

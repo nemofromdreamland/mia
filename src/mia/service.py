@@ -12,7 +12,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict
 
-from mia.cases import CaseError, CaseNotFoundError, load_case
+from mia.cases import CaseError, CaseNotFoundError, load_case, load_examples
 from mia.cases import list_cases as load_cases
 from mia.interviewer import (
     DEFAULT_LIMITS,
@@ -46,9 +46,11 @@ from mia.repositories import (
     SessionRepository,
 )
 from mia.schemas import (
+    AnswerExample,
     AnswerResult,
     CaseStats,
     CaseSummary,
+    ExamplesView,
     InterviewPlan,
     Mode,
     Persona,
@@ -116,6 +118,7 @@ class ServiceDeps(BaseModel):
     report: Callable[[InterviewPlan, list[Turn]], ReportResult]
     clock: Clock
     cases_dir: Path
+    suggest: Any = None  # mia.suggestions.Suggest for follow-ups; None = plan examples only
 
 
 @contextmanager
@@ -371,6 +374,84 @@ def end_interview(deps: ServiceDeps, visitor_id: str, session_id: str) -> dict[s
     return {"status": "scoring"}
 
 
+def voice_state(deps: ServiceDeps, visitor_id: str, session_id: str) -> dict[str, Any]:
+    """`state` payload of the voice protocol: phase, question number (1-based), elapsed time."""
+    with _session_lookup():
+        session = deps.repo.get_session(visitor_id, session_id)
+    plan = _load_plan(deps, session)
+    ids = [question.id for question in plan.questions]
+    index = ids.index(session.current_question_id) if session.current_question_id in ids else 0
+    elapsed = 0
+    if session.started_at is not None:
+        elapsed = max(0, int((deps.clock() - session.started_at).total_seconds()))
+    return {
+        "phase": plan.questions[index].phase,
+        "question_no": index + 1,
+        "elapsed_s": elapsed,
+    }
+
+
+def authorize_voice(deps: ServiceDeps, visitor_id: str, session_id: str) -> None:
+    """May this visitor open voice for this session? Owner, `voice` mode, ready/in_progress and
+    demo open. The quota was already consumed by create_session, so nothing is incremented."""
+    with _session_lookup():
+        session = deps.repo.get_session(visitor_id, session_id)
+    from mia.quotas import DEMO_PAUSED_MESSAGE  # quotas imports service: import here
+
+    if session.mode != "voice" or session.status not in ("ready", "in_progress"):
+        raise ServiceError("invalid_state", "Esta sessão não aceita voz agora.")
+    is_open = getattr(deps.gate, "is_demo_open", None)
+    if callable(is_open) and not is_open():
+        raise ServiceError("demo_paused", DEMO_PAUSED_MESSAGE)
+
+
+def get_examples(deps: ServiceDeps, visitor_id: str, session_id: str) -> ExamplesView:
+    """Strong/weak answer suggestion for the interviewer's latest line (spec 5.6): plan questions
+    use the case fixture; follow-ups are generated on demand. Marks `examples_seen`, a neutral
+    note that never changes the score."""
+    with _session_lookup():
+        session = deps.repo.get_session(visitor_id, session_id)
+    if session.status != "in_progress" or session.current_question_id is None:
+        raise ServiceError("invalid_state", "A entrevista não está em andamento.")
+    turns = deps.repo.list_turns(visitor_id, session_id)
+    last = turns[-1] if turns else None
+    if last is not None and last.is_follow_up and deps.suggest is not None:
+        try:
+            found = deps.suggest(
+                session.case_id or "",
+                last.question_id,
+                last.interviewer_text,
+                f"{session_id}#{last.turn_no}",
+            )
+        except LLMInvalidOutputError as exc:
+            raise ServiceError(
+                "provider_unavailable", "Sugestão indisponível.", retryable=True
+            ) from exc
+    else:
+        found = _plan_example(deps, session)
+    if not session.examples_seen:
+        _update(deps, session, "in_progress", {"examples_seen": True})
+    return ExamplesView(
+        question_id=found.question_id,
+        turn_no=last.turn_no if last else 0,
+        strong=found.strong,
+        weak=found.weak,
+    )
+
+
+def _plan_example(deps: ServiceDeps, session: Session) -> AnswerExample:
+    try:
+        examples = load_examples(session.case_id or "", deps.cases_dir)
+    except CaseError as exc:
+        raise ServiceError("not_found", "Sem sugestões para este caso.") from exc
+    found = next(
+        (e for e in examples.examples if e.question_id == session.current_question_id), None
+    )
+    if found is None:
+        raise ServiceError("not_found", "Sem sugestões para esta pergunta.")
+    return found
+
+
 def get_report(deps: ServiceDeps, visitor_id: str, session_id: str) -> ReportView:
     with _session_lookup():
         session = deps.repo.get_session(visitor_id, session_id)
@@ -380,7 +461,12 @@ def get_report(deps: ServiceDeps, visitor_id: str, session_id: str) -> ReportVie
     turns = deps.repo.list_turns(visitor_id, session_id)
     completed = deps.repo.list_completed(session.case_id) if session.case_id else []
     above = is_above_average(session.overall_score, case_average(completed))
-    return ReportView(report=report, turns=turns, is_above_case_avg=above)
+    return ReportView(
+        report=report,
+        turns=turns,
+        is_above_case_avg=above,
+        examples_seen=session.examples_seen,
+    )
 
 
 def list_recruiter_candidates(deps: ServiceDeps, case_id: str | None = None) -> RecruiterList:
@@ -404,5 +490,9 @@ def get_recruiter_candidate(deps: ServiceDeps, session_id: str) -> RecruiterCand
         report, summary = deps.reports.load(session_id)
         turns = deps.repo.list_turns(session.visitor_id, session_id)
     return RecruiterCandidate(
-        row=build_row(session, case_average(same_case)), summary=summary, report=report, turns=turns
+        row=build_row(session, case_average(same_case)),
+        summary=summary,
+        report=report,
+        turns=turns,
+        examples_seen=session.examples_seen,
     )

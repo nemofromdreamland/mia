@@ -46,7 +46,7 @@ def test_case_yaml_is_valid_and_matches_table(case_id: str) -> None:
     assert (case.title, case.company, case.level, case.persona) == (title, company, level, persona)
     assert case.language == "pt-BR"
     assert case.estimated_minutes == 6  # spec 4.7c: short web interview
-    assert case.version == 2
+    assert case.version == 3  # 5.6: examples.json added
 
 
 @pytest.mark.parametrize("case_id", CASE_IDS)

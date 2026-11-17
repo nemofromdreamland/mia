@@ -7,4 +7,4 @@ language: pt-BR
 blurb: "Edtech procura estagiário(a) motivado(a) para aprender desenvolvimento de software em equipe."
 candidate_blurb: "Você é Elisa, estudante de Ciência da Computação em busca do primeiro estágio, com projetos da faculdade."
 estimated_minutes: 6
-version: 2               # sobe quando cv, vaga ou plano mudam
+version: 3               # sobe quando cv, vaga ou plano mudam

@@ -1,0 +1,21 @@
+{
+  "case_id": "backend-python-jr",
+  "generated_by": "synthetic_candidate@v4 groq:openai/gpt-oss-120b",
+  "examples": [
+    {
+      "question_id": "q1",
+      "strong": "Sou desenvolvedora em início de carreira, antes trabalhei 5 anos como assistente de operações logísticas na Transportes Rio Claro, coordenando 30 pessoas e 2 mil entregas semanais, onde otimizei rotas e reduzi atrasos em 15 %. Em 2023 decidi migrar para tecnologia, estudando Python e APIs diariamente. Criei uma API de controle de entregas com FastAPI e PostgreSQL e um robô que gera relatórios diários, ambos em produção no GitHub. Busco minha primeira vaga em time de software para aprender e contribuir.",
+      "weak": "Sou de Belo Horizonte, atuei em logística coordenando expedição, e há um ano venho estudando Python e desenvolvimento de APIs, realizando projetos pessoais. Busco minha primeira vaga em equipe de software para aprender e crescer."
+    },
+    {
+      "question_id": "q4",
+      "strong": "No projeto final do curso, desenvolvi a API de biblioteca em dupla. Quando minha colega revisava o código, apontava, por exemplo, que o fluxo de geração de token estava duplicado. Eu analisava a sugestão, refatorava a função e adicionava testes unitários. A mudança reduziu o tempo de resposta da autenticação em 30 % e eliminou falhas nos testes, mostrando que aceito o feedback como oportunidade de melhorar a qualidade do código.",
+      "weak": "Recebia o feedback do colega de forma aberta, analisava as sugestões e, quando necessário, ajustava o código para melhorar a clareza ou a funcionalidade, sempre buscando aprender com a troca."
+    },
+    {
+      "question_id": "q6",
+      "strong": "Primeiro faço uma demo ao vivo, mostrando os endpoints via Swagger e explicando o fluxo de dados, as regras de negócio e os casos de erro. Em seguida, documento no README a arquitetura, diagramas de sequência, a especificação OpenAPI, exemplos de requisição/resposta, parâmetros, dependências, como rodar localmente (Docker, .env) e instruções de teste com pytest. Também registro decisões e métricas de desempenho.",
+      "weak": "Eu faria uma apresentação breve ao time, explicando o fluxo da funcionalidade, os endpoints da API, os parâmetros e exemplos de uso. Documentaria requisitos, arquitetura, rotas, respostas, erros, testes e instruções de implantação."
+    }
+  ]
+}

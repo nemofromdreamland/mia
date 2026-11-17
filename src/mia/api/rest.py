@@ -85,6 +85,11 @@ def end_interview(session_id: str, visitor_id: VisitorId, deps: Deps) -> Respons
     return build_response(200, service.end_interview(deps, visitor_id, session_id))
 
 
+@router.get("/sessions/{session_id}/examples")
+def get_examples(session_id: str, visitor_id: VisitorId, deps: Deps) -> Response:
+    return build_response(200, service.get_examples(deps, visitor_id, session_id))
+
+
 @router.get("/sessions/{session_id}/report")
 def get_report(session_id: str, visitor_id: VisitorId, deps: Deps) -> Response:
     return build_response(200, service.get_report(deps, visitor_id, session_id))

@@ -65,7 +65,10 @@ def test_full_run_order_and_build_env() -> None:
     assert run.tools() == ["terraform", "npm", "aws", "aws", "aws"]
     build_cmd, env = run.calls[1]
     assert build_cmd == ["npm", "--prefix", "frontend", "run", "build"]
-    assert env == {"VITE_API_BASE_URL": "https://abc.execute-api.us-east-1.amazonaws.com"}
+    assert env == {
+        "VITE_API_BASE_URL": "https://abc.execute-api.us-east-1.amazonaws.com",
+        "VITE_VOICE_ENABLED": "true",
+    }
 
 
 def test_build_failure_stops_before_upload() -> None:

@@ -69,7 +69,9 @@ terraform -chdir=infra plan
 ## Convenções
 
 - Python 3.12, `uv`, tipagem em tudo, Ruff, pytest. Cobertura mínima de 80% no código de `src/mia/`.
-- Código, nomes e commits em inglês; documentação e textos de interface em português.
+- Código, nomes e commits em inglês; documentação interna (PRD, TRD, APP_FLOW, CASES, `docs/design/`, specs) e textos de interface em português.
+- Documentação pública em **inglês**: `README.md`, `docs/architecture.md`, `docs/security.md`, `docs/evaluation.md`, `docs/prompt-guide.md`, `docs/running-locally.md`, `docs/costs.md` e ADRs novos em `docs/adr/` (spec 6.4). Todo número citado nela sai de `uv run python scripts/doc_numbers.py`.
+- Antes de commitar documento público ou mídia: `uv run python scripts/audit_public.py --history` deve dar `0 findings outside allowlist`.
 - Funções pequenas; sem dependências novas sem justificar na spec.
 - Commits pequenos, um por passo, mensagem `feat(1.4.2): ...` / `fix(...)` / `test(...)`.
 - Frontend: siga o `docs/design/` à risca (tokens, componentes, microcopy, lista "Proibido"). Nenhuma cor, tamanho ou texto inventado.

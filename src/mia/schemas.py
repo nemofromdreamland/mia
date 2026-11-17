@@ -1,7 +1,7 @@
 """Pydantic schemas shared across MIA (see docs/BACKEND_SCHEMA.md)."""
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -204,6 +204,7 @@ class Session(BaseModel):
     updated_at: datetime
     started_at: datetime | None = None
     ended_at: datetime | None = None
+    examples_seen: bool = False  # spec 5.6: neutral mark, never changes the score
 
 
 # ---------- Service responses ----------
@@ -227,6 +228,7 @@ class ReportView(BaseModel):
     report: Report
     turns: list[Turn]
     is_above_case_avg: bool | None  # None without an average (< 3 completed sessions)
+    examples_seen: bool = False  # spec 5.6: neutral note only
 
 
 class RecruiterList(BaseModel):
@@ -239,6 +241,7 @@ class RecruiterCandidate(BaseModel):
     summary: CandidateSummary
     report: Report
     turns: list[Turn]
+    examples_seen: bool = False  # spec 5.6: neutral note only, never a decision input
 
 
 # ---------- Evaluation ----------
@@ -399,3 +402,128 @@ class RunRecord(BaseModel):
     cost_usd: float
     error: str | None
     created_at: datetime
+
+
+# ---------- Voice (spec 5) ----------
+
+
+class VoiceConfig(BaseModel):
+    """config/voice.yaml: which Sonic model/voice to use and the audio formats."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model_id: str
+    region: str
+    voice_id: str
+    input_sample_rate: int = 16000
+    output_sample_rate: int = 24000
+    max_chunk_bytes: int = Field(default=4096, gt=0)
+
+
+class _ClientEvent(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class SessionStartPayload(_ClientEvent):
+    session_id: str = Field(min_length=1, max_length=64)
+
+
+class AudioChunkPayload(_ClientEvent):
+    data: str = Field(max_length=8192)  # base64; decoded size is checked by the /ws layer
+
+
+class AudioMutePayload(_ClientEvent):
+    muted: bool
+
+
+class EmptyPayload(_ClientEvent):
+    pass
+
+
+class SessionStartEvent(_ClientEvent):
+    type: Literal["session.start"]
+    payload: SessionStartPayload
+
+
+class AudioChunkEvent(_ClientEvent):
+    type: Literal["audio.chunk"]
+    payload: AudioChunkPayload
+
+
+class AudioMuteEvent(_ClientEvent):
+    type: Literal["audio.mute"]
+    payload: AudioMutePayload
+
+
+class SessionEndEvent(_ClientEvent):
+    type: Literal["session.end"]
+    payload: EmptyPayload = Field(default_factory=EmptyPayload)
+
+
+class AnswerSubmitEvent(_ClientEvent):
+    """Spec 5.6: the visitor clicked Enviar; the recorded audio was already sent."""
+
+    type: Literal["answer.submit"]
+    payload: EmptyPayload = Field(default_factory=EmptyPayload)
+
+
+ClientEvent = Annotated[
+    SessionStartEvent | AudioChunkEvent | AudioMuteEvent | SessionEndEvent | AnswerSubmitEvent,
+    Field(discriminator="type"),
+]
+
+ServerEventType = Literal[
+    "audio.output",
+    "transcript",
+    "interrupted",
+    "state",
+    "turn.saved",
+    "session.ended",
+    "error",
+]
+
+
+class ServerEvent(BaseModel):
+    """Backend -> browser event (docs/BACKEND_SCHEMA.md, WebSocket); never a Sonic event."""
+
+    type: ServerEventType
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class VoiceUrl(BaseModel):
+    """POST /sessions/{id}/voice-url: signed WebSocket URL, valid for `expires_in` seconds."""
+
+    url: str
+    expires_in: int = 300
+
+
+# ---------- Answer examples (spec 5.6) ----------
+
+
+class AnswerExample(BaseModel):
+    """Example answers for one plan question: a strong and a weak one, generated beforehand."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question_id: str
+    strong: str = Field(min_length=1)
+    weak: str = Field(min_length=1)
+
+
+class CaseExamples(BaseModel):
+    """cases/<id>/examples.json."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    case_id: str
+    generated_by: str  # "<prompt>@v<N> <model>"
+    examples: list[AnswerExample]
+
+
+class ExamplesView(BaseModel):
+    """GET /sessions/{id}/examples: examples for the current question only."""
+
+    question_id: str
+    turn_no: int  # the interviewer line these suggestions answer
+    strong: str
+    weak: str

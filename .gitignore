@@ -33,3 +33,13 @@ results/*.json
 # Playwright output
 frontend/test-results/
 frontend/playwright-report/
+
+# Demo media (task 6.4): text-mode videos are public and audited frame by frame.
+# Recording scripts hold the real demo URL; the aborted voice capture shows the browser URL bar.
+media/*
+!media/demo-desktop.webm
+!media/demo-desktop.mp4
+!media/demo-mobile.webm
+
+# Production run records (task 6.4): free text typed by demo visitors; aggregates only in results/production_summary.md
+runs/*aws*

@@ -1,0 +1,21 @@
+{
+  "case_id": "software-intern",
+  "generated_by": "synthetic_candidate@v4 groq:openai/gpt-oss-120b",
+  "examples": [
+    {
+      "question_id": "q1",
+      "strong": "Costumo combinar estudo autodidata com colaboração. Quando desenvolvi o sistema de biblioteca em Java, pesquisei a API e padrões de design sozinho, depois discuti a modelagem e os testes com o grupo de quatro pessoas, o que garantiu um cadastro de livros funcional e cobertura de testes completa. Também reforço o aprendizado ajudando colegas como monitora de Algoritmos, o que solidifica o conhecimento e gera resultados práticos.",
+      "weak": "Costumo aprender fazendo: estudo a documentação e tutoriais, mas também troco ideias com colegas e professores; geralmente combina estudo individual com ajuda em grupo ou monitoria quando preciso esclarecer dúvidas."
+    },
+    {
+      "question_id": "q4",
+      "strong": "Eu documento usando README em Markdown no repositório Git, diagramas de classes no draw.io e comentários claros no código, além de registrar tarefas no GitHub Issues. No projeto de biblioteca, criamos um README detalhado e diagramas; isso facilitou a integração da equipe e reduziu bugs em cerca de 30 % nos testes.",
+      "weak": "Geralmente registro tudo em arquivos de texto simples, como README, e mantenho anotações no repositório. Também costumo usar comentários no código e o Git para versionar e acompanhar as mudanças."
+    },
+    {
+      "question_id": "q6",
+      "strong": "A situação mais difícil foi quando um grupo de alunos não conseguia entender o algoritmo de Dijkstra, gerando frustração. Convidei‑os para uma sessão extra, expliquei o conceito passo a passo usando um grafo desenhado no quadro e implementei o algoritmo em Python ao vivo, destacando cada iteração. Após a aula, todos conseguiram resolver os exercícios e a nota média da turma subiu de 6,2 para 8,0.",
+      "weak": "A situação mais difícil foi quando muitos colegas tinham dúvidas ao mesmo tempo sobre um exercício complexo; eu organizei o atendimento, expliquei de forma geral e incentivei a prática, tentando manter todos tranquilos."
+    }
+  ]
+}

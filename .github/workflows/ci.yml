@@ -81,6 +81,14 @@ jobs:
           terraform_version: "~1.17"
       - name: Format
         run: terraform fmt -check -recursive
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Build the proxy zip read by lambda.tf (task 4.2)
+        working-directory: .
+        run: |
+          uv python install 3.12
+          uv run python scripts/build_proxy.py
       - name: Init without backend or credentials
         run: terraform init -backend=false -input=false
       - name: Validate
