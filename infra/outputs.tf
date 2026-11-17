@@ -22,3 +22,8 @@ output "proxy_role_arn" {
   description = "Execution role of the Lambda proxy (task 4.2)."
   value       = aws_iam_role.proxy.arn
 }
+
+output "api_url" {
+  description = "Public API base URL (VITE_API_BASE_URL for the frontend, task 4.6)."
+  value       = aws_apigatewayv2_stage.default.invoke_url
+}

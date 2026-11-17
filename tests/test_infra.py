@@ -253,3 +253,52 @@ def test_proxy_lambda() -> None:
 def test_proxy_log_group_keeps_7_days() -> None:
     block = squash(resource_block("aws_cloudwatch_log_group", "proxy"))
     assert 'name = "/aws/lambda/mia-proxy"' in block and "retention_in_days = 7" in block
+
+
+# ---------- 4.2 R3–R5: HTTP API ----------
+
+
+def handler_route_keys() -> set[str]:
+    """`METHOD /path` for every proxy route, with `{id}` placeholders like the API Gateway."""
+    import proxy.handler as handler
+
+    keys = set()
+    for method, pattern, _action in handler.ROUTES:
+        path = pattern.pattern.strip("^$").replace("(?P<sid>[A-Za-z0-9]+)", "{id}")
+        keys.add(f"{method} {path}")
+    return keys
+
+
+def test_routes_match_the_proxy() -> None:
+    block = resource_block("aws_apigatewayv2_route", "proxy")
+    declared = set(re.findall(r'"((?:GET|POST|DELETE) /[^"]*)"', read_infra()))
+    assert "for_each" in block
+    assert declared == handler_route_keys()
+    assert len(declared) == 11
+
+
+def test_integration_is_lambda_payload_2() -> None:
+    block = squash(resource_block("aws_apigatewayv2_integration", "proxy"))
+    assert 'integration_type = "AWS_PROXY"' in block
+    assert 'payload_format_version = "2.0"' in block
+    assert "aws_lambda_function.proxy.invoke_arn" in block
+
+
+def test_stage_throttling() -> None:
+    block = squash(resource_block("aws_apigatewayv2_stage", "default"))
+    assert 'name = "$default"' in block and "auto_deploy = true" in block
+    assert "throttling_rate_limit = 5" in block and "throttling_burst_limit = 10" in block
+
+
+def test_cors_only_for_configured_origins() -> None:
+    block = squash(resource_block("aws_apigatewayv2_api", "http"))
+    assert 'protocol_type = "HTTP"' in block
+    assert 'dynamic "cors_configuration"' in block
+    assert "var.cors_allowed_origins" in block
+    assert '"x-visitor-id"' in block and '"content-type"' in block
+
+
+def test_api_gateway_may_invoke_the_lambda() -> None:
+    block = squash(resource_block("aws_lambda_permission", "api"))
+    assert 'principal = "apigateway.amazonaws.com"' in block
+    assert "aws_apigatewayv2_api.http.execution_arn" in block
