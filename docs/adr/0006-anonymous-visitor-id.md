@@ -13,7 +13,7 @@ personal data, and an open endpoint on paid models needs a cost ceiling.
 The browser creates a random UUID v4, keeps it in `localStorage` and sends it as `X-Visitor-Id`.
 The backend validates it and never reads the visitor from the request body; every session
 operation filters by it. Before a session is created, `quotas.py` checks the kill switch
-(`config/demo.open`), 100 sessions per day globally and 5 per visitor per day. API Gateway adds
+(item `config/demo` in the `mia-meta` table), 100 sessions per day globally and 5 per visitor per day. API Gateway adds
 throttling.
 
 ## Consequences

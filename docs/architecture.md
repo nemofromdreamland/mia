@@ -61,7 +61,7 @@ interview loop in the terminal.
 | `interviewer.py` | State machine (phase, current question, time, turn limit) and tools: next question, follow-up, score, time check, end. |
 | `judge.py` | 1-5 score against the question's `look_for` criteria; every evidence quote must exist **literally** in the answer, checked in code. |
 | `report_graph.py` | LangGraph report: scores → aggregate → improvements → candidate summary. |
-| `quotas.py` | Kill switch (`config/demo.open`), 100 sessions/day global, 5/visitor/day, candidate numbering per case. |
+| `quotas.py` | Kill switch (item `config/demo` in `mia-meta`), 100 sessions/day global, 5/visitor/day, candidate numbering per case. |
 | `recruiter.py` | Per-case average, candidates above it, anonymous detail. Never exposes `visitor_id`. |
 | `service.py` | Use cases behind the API; every session operation filters by `visitor_id`. |
 | `repositories.py`, `repo_dynamo.py`, `repo_s3.py` | Each store has an interface, an in-memory implementation (tests, local server) and an AWS one. |
