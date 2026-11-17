@@ -81,3 +81,30 @@ export type SessionView = {
 
 /** `POST /sessions/:id/turns`: the next turn, or `ended` when the interview closed. */
 export type AnswerResult = { turn: PublicTurn | null; ended: boolean };
+
+export type AnswerScore = {
+  score: number;
+  criteria_met: string[];
+  evidence_quotes: string[];
+  justification: string;
+  quotes_verified?: boolean | null;
+};
+
+/** Full turn, only after the interview (report and recruiter screens). */
+export type Turn = PublicTurn & {
+  session_id: string;
+  is_follow_up: boolean;
+  score: AnswerScore | null;
+};
+
+export type CompetencyScore = { competency: string; score: number; summary: string };
+export type Improvement = { question_id: string; issue: string; stronger_answer: string };
+
+export type Report = {
+  overall_score: number;
+  competencies: CompetencyScore[];
+  strengths: string[];
+  improvements: Improvement[];
+};
+
+export type ReportView = { report: Report; turns: Turn[]; is_above_case_avg: boolean | null };
