@@ -51,3 +51,10 @@ export function rubricLabel(score: number): string {
   const rounded = Math.min(5, Math.max(1, Math.round(score)));
   return RUBRIC[rounded - 1];
 }
+
+/** Fit label from Design section 5.15 (0–39 / 40–69 / 70–100). */
+export function fitLabel(score: number): string {
+  if (score < 40) return "Aderência baixa";
+  if (score < 70) return "Aderência média";
+  return "Aderência alta";
+}

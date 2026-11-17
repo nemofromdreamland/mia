@@ -38,3 +38,43 @@ export type Session = {
   started_at?: string | null;
   ended_at?: string | null;
 };
+
+export type Evidence = { point: string; cv_quote: string };
+
+export type Screening = {
+  job_title: string;
+  fit_score: number;
+  strengths: Evidence[];
+  concerns: Evidence[];
+  missing_keywords: string[];
+  competencies: string[];
+};
+
+export type Case = {
+  case_id: string;
+  title: string;
+  company: string;
+  level: Level;
+  persona: Persona;
+  language: Language;
+  blurb: string;
+  candidate_blurb: string;
+  estimated_minutes: number;
+  version: number;
+};
+
+/** Turn shown during the interview: no score, decision or follow-up flag. */
+export type PublicTurn = {
+  turn_no: number;
+  question_id: string;
+  interviewer_text: string;
+  answer_text: string | null;
+  created_at: string;
+};
+
+export type SessionView = {
+  session: Session;
+  case: Case | null;
+  screening: Screening | null;
+  turns: PublicTurn[] | null;
+};
