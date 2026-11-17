@@ -73,14 +73,8 @@ export function CaseDialog({ item, blocked, onClose, onCreated, onBlocked }: Cas
                 {item.estimated_minutes} min
               </DialogDescription>
             </DialogHeader>
-            <section className="flex flex-col gap-2">
-              <h3 className="label text-muted-foreground">A vaga</h3>
-              <p className="text-body">{item.blurb}</p>
-            </section>
-            <section className="flex flex-col gap-2">
-              <h3 className="label text-muted-foreground">Você vai interpretar</h3>
-              <p className="text-body text-foreground-soft">{item.candidate_blurb}</p>
-            </section>
+            <Clamp label="A vaga" text={item.blurb} />
+            <Clamp label="Você vai interpretar" text={item.candidate_blurb} soft />
             {showMode && (
               <section className="flex flex-col gap-2">
                 <h3 id="mode-label" className="label text-muted-foreground">
@@ -103,10 +97,9 @@ export function CaseDialog({ item, blocked, onClose, onCreated, onBlocked }: Cas
                 </ToggleGroup>
               </section>
             )}
-            <InlineNotice variant="neutral">
-              Suas respostas ficam anônimas e podem aparecer na tela do recrutador desta demo. Não escreva
-              dados pessoais.
-            </InlineNotice>
+            <p className="text-small text-muted-foreground">
+              Respostas anônimas, visíveis ao recrutador da demo. Não use dados pessoais.
+            </p>
             {blocked && <InlineNotice variant="warning">{blockedText(blocked)}</InlineNotice>}
             <DialogFooter>
               <Button variant="outline" onClick={onClose}>
@@ -126,5 +119,21 @@ export function CaseDialog({ item, blocked, onClose, onCreated, onBlocked }: Cas
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Spec 5.6: at most 2 lines, with "Ver mais" to expand. */
+function Clamp({ label, text, soft = false }: { label: string; text: string; soft?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="flex flex-col gap-1">
+      <h3 className="label text-muted-foreground">{label}</h3>
+      <p className={`text-body ${soft ? "text-foreground-soft" : ""} ${open ? "" : "line-clamp-2"}`}>{text}</p>
+      {text.length > 120 && (
+        <Button variant="link" size="sm" className="h-auto self-start p-0" onClick={() => setOpen((o) => !o)}>
+          {open ? "Ver menos" : "Ver mais"}
+        </Button>
+      )}
+    </section>
   );
 }

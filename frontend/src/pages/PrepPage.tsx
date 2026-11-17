@@ -8,6 +8,7 @@ import { FitScore } from "@/components/FitScore";
 import { SessionNotFound } from "@/components/FullPageState";
 import { InlineNotice } from "@/components/InlineNotice";
 import { KeywordChip } from "@/components/KeywordChip";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -108,36 +109,63 @@ function Screening({ id, view, reload }: ScreeningProps) {
         <FitScore score={screening.fit_score} />
       </section>
 
-      <div className="grid grid-cols-1 gap-12 md:grid-cols-2 md:gap-6">
-        <EvidenceList title="Pontos fortes" items={screening.strengths} />
-        <EvidenceList title="Pontos de atenção" items={screening.concerns} />
-      </div>
-
-      {screening.missing_keywords.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-h2">Palavras-chave da vaga que não aparecem no CV</h2>
-          <div className="flex flex-wrap gap-2">
-            {screening.missing_keywords.map((k) => (
-              <KeywordChip key={k}>{k}</KeywordChip>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="flex flex-col gap-3">
-        <h2 id="competencies-title" className="text-h2">
-          O que será avaliado
-        </h2>
-        <ol aria-labelledby="competencies-title" className="flex flex-col gap-2">
-          {screening.competencies.map((c, i) => (
-            <li key={c} className="flex gap-3 text-body">
-              <span className="font-mono text-muted-foreground tabular-nums">{i + 1}</span>
-              {c}
-            </li>
-          ))}
-        </ol>
-        <p className="text-small text-muted-foreground">As perguntas só aparecem durante a entrevista.</p>
+      <section className="flex flex-col gap-2" aria-label="Resumo da triagem">
+        {screening.strengths[0] && (
+          <p className="text-body">
+            <span className="label mr-2 text-muted-foreground">Força</span>
+            {screening.strengths[0].point}
+          </p>
+        )}
+        {screening.concerns[0] && (
+          <p className="text-body">
+            <span className="label mr-2 text-muted-foreground">Atenção</span>
+            {screening.concerns[0].point}
+          </p>
+        )}
+        <p className="text-small text-muted-foreground">
+          {`${screening.competencies.length} competências avaliadas. As perguntas só aparecem durante a entrevista.`}
+        </p>
       </section>
+
+      <Accordion type="multiple" className="flex flex-col" data-testid="prep-details">
+        <AccordionItem value="strengths">
+          <AccordionTrigger className="text-body">Pontos fortes</AccordionTrigger>
+          <AccordionContent>
+            <EvidenceList items={screening.strengths} />
+          </AccordionContent>
+        </AccordionItem>
+        <AccordionItem value="concerns">
+          <AccordionTrigger className="text-body">Pontos de atenção</AccordionTrigger>
+          <AccordionContent>
+            <EvidenceList items={screening.concerns} />
+          </AccordionContent>
+        </AccordionItem>
+        {screening.missing_keywords.length > 0 && (
+          <AccordionItem value="keywords">
+            <AccordionTrigger className="text-body">Palavras-chave da vaga que não aparecem no CV</AccordionTrigger>
+            <AccordionContent>
+              <div className="flex flex-wrap gap-2">
+                {screening.missing_keywords.map((k) => (
+                  <KeywordChip key={k}>{k}</KeywordChip>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )}
+        <AccordionItem value="competencies">
+          <AccordionTrigger className="text-body">O que será avaliado</AccordionTrigger>
+          <AccordionContent>
+            <ol className="flex flex-col gap-2">
+              {screening.competencies.map((c, i) => (
+                <li key={c} className="flex gap-3 text-body">
+                  <span className="font-mono text-muted-foreground tabular-nums">{i + 1}</span>
+                  {c}
+                </li>
+              ))}
+            </ol>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       <div className="flex flex-col gap-4">
         {session.mode === "voice" && (
@@ -168,16 +196,15 @@ function Screening({ id, view, reload }: ScreeningProps) {
   );
 }
 
-function EvidenceList({ title, items }: { title: string; items: Evidence[] }) {
+function EvidenceList({ items }: { items: Evidence[] }) {
   return (
-    <section className="flex flex-col gap-4">
-      <h2 className="text-h2">{title}</h2>
+    <div className="flex flex-col gap-4">
       {items.map((item) => (
         <div key={item.point} className="flex flex-col gap-2">
           <h3 className="text-h3">{item.point}</h3>
           <EvidenceQuote label="DO CV DO CASO" quote={item.cv_quote} />
         </div>
       ))}
-    </section>
+    </div>
   );
 }

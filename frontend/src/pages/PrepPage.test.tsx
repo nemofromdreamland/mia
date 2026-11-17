@@ -51,12 +51,17 @@ describe("PrepPage", () => {
     );
     expect(screen.getByText("Você é Ana, recém-formada em Sistemas de Informação.")).toBeInTheDocument();
     expect(screen.getByRole("meter")).toHaveAttribute("aria-valuenow", "72");
+    // Spec 5.6: short summary on top, details collapsed until clicked.
+    expect(screen.getByText(/3 competências avaliadas\. As perguntas só aparecem durante a entrevista\./)).toBeInTheDocument();
+    expect(screen.queryByText("DO CV DO CASO")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Pontos fortes" }));
+    await userEvent.click(screen.getByRole("button", { name: "Pontos de atenção" }));
     expect(screen.getAllByText("DO CV DO CASO")).toHaveLength(2);
     expect(screen.getByText("“chatbot com RAG sobre 3 fontes”")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Palavras-chave/ }));
     expect(screen.getByText("LangGraph")).toBeInTheDocument();
-    const list = screen.getByRole("list", { name: "O que será avaliado" });
-    expect(within(list).getAllByRole("listitem")).toHaveLength(3);
-    expect(screen.getByText("As perguntas só aparecem durante a entrevista.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "O que será avaliado" }));
+    expect(within(screen.getByTestId("prep-details")).getAllByRole("listitem")).toHaveLength(3);
     expect(screen.queryByText(/fone de ouvido/)).not.toBeInTheDocument();
   });
 
