@@ -33,3 +33,6 @@ results/*.json
 # Playwright output
 frontend/test-results/
 frontend/playwright-report/
+
+# Demo videos and their recording scripts (task 4.9): kept outside the repo
+media/
