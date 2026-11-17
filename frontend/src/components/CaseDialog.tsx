@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { InlineNotice } from "@/components/InlineNotice";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,11 @@ import {
 import { ApiError, apiRequest } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { interviewName, levelText } from "@/lib/labels";
-import type { CaseSummary, Session } from "@/lib/types";
+import type { CaseSummary, Mode, Session } from "@/lib/types";
+
+function voiceEnabled(): boolean {
+  return import.meta.env.VITE_VOICE_ENABLED === "true";
+}
 
 type CaseDialogProps = {
   item: CaseSummary | null;
@@ -35,12 +40,17 @@ function blockedText(error: ApiError): string {
 /** Design section 5.31. */
 export function CaseDialog({ item, blocked, onClose, onCreated, onBlocked }: CaseDialogProps) {
   const [creating, setCreating] = useState(false);
+  const [mode, setMode] = useState<Mode>("text");
+  const showMode = voiceEnabled();
 
   async function start() {
     if (!item) return;
     setCreating(true);
     try {
-      const session = await apiRequest<Session>("POST", "/sessions", { case_id: item.case_id, mode: "text" });
+      const session = await apiRequest<Session>("POST", "/sessions", {
+        case_id: item.case_id,
+        mode: showMode ? mode : "text",
+      });
       onCreated(session);
     } catch (err) {
       const error = err instanceof ApiError ? err : new ApiError("internal", true, null);
@@ -71,6 +81,28 @@ export function CaseDialog({ item, blocked, onClose, onCreated, onBlocked }: Cas
               <h3 className="label text-muted-foreground">Você vai interpretar</h3>
               <p className="text-body text-foreground-soft">{item.candidate_blurb}</p>
             </section>
+            {showMode && (
+              <section className="flex flex-col gap-2">
+                <h3 id="mode-label" className="label text-muted-foreground">
+                  Formato
+                </h3>
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  aria-labelledby="mode-label"
+                  value={mode}
+                  onValueChange={(value) => value && setMode(value as Mode)}
+                  className="w-full"
+                >
+                  <ToggleGroupItem value="text" data-testid="mode-text" className="flex-1">
+                    Texto
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="voice" data-testid="mode-voice" className="flex-1">
+                    Voz
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </section>
+            )}
             <InlineNotice variant="neutral">
               Suas respostas ficam anônimas e podem aparecer na tela do recrutador desta demo. Não escreva
               dados pessoais.
