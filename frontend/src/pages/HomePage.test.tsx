@@ -94,6 +94,52 @@ describe("HomePage — cases", () => {
     expect(within(dialog).getByTestId("start-case")).toBeDisabled();
   });
 
+  it("blocks start on global quota (3.7 R2)", async () => {
+    mockApi({
+      "GET /cases": CASES,
+      "GET /sessions": [],
+      "POST /sessions": json(429, { error: { code: "quota_exceeded", message: "raw", retryable: false, scope: "global" } }),
+    });
+    renderHome("/?caso=prompt-engineer-jr");
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByTestId("start-case"));
+    expect(await within(dialog).findByText("A demo atingiu o limite de hoje. Volte amanhã.")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("start-case")).toBeDisabled();
+    expect(screen.queryByText("raw")).not.toBeInTheDocument();
+  });
+
+  it("shows the load error with retry when the network fails (3.7 R7)", async () => {
+    let fail = true;
+    mockApi({
+      "GET /cases": () => {
+        if (fail) throw new TypeError("Failed to fetch");
+        return json(200, CASES);
+      },
+      "GET /sessions": [],
+    });
+    renderHome();
+    expect(await screen.findByText("Não foi possível carregar os casos.")).toBeInTheDocument();
+    fail = false;
+    await userEvent.click(screen.getByRole("button", { name: "Tentar de novo" }));
+    expect(await screen.findByTestId("case-card-prompt-engineer-jr")).toBeInTheDocument();
+  });
+
+  it("shows the no-connection toast when creating a session offline (3.7 R7)", async () => {
+    mockApi({
+      "GET /cases": CASES,
+      "GET /sessions": [],
+      "POST /sessions": () => {
+        throw new TypeError("Failed to fetch");
+      },
+    });
+    renderHome("/?caso=prompt-engineer-jr");
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByTestId("start-case"));
+    expect(
+      await screen.findByText("Sem conexão com o servidor. Confira sua internet e tente de novo."),
+    ).toBeInTheDocument();
+  });
+
   it("shows the paused notice in the dialog and above the cases", async () => {
     mockApi({
       "GET /cases": CASES,

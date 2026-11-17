@@ -34,6 +34,9 @@ describe("HomePage — history", () => {
     renderHome();
     await screen.findByTestId("case-card-prompt-engineer-jr");
     expect(screen.queryByText("Suas simulações neste navegador")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("delete-history")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("session-row")).not.toBeInTheDocument();
+    expect(screen.queryByText("A evolução aparece a partir da segunda simulação concluída.")).not.toBeInTheDocument();
   });
 
   it("shows the evolution placeholder with one completed session", async () => {

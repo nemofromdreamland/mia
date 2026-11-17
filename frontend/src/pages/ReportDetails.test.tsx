@@ -93,6 +93,19 @@ describe("ReportPage — actions", () => {
     expect(button).toHaveAttribute("aria-disabled", "true");
   });
 
+  it("disables training again when the global quota is over (3.7 R2)", async () => {
+    setup({
+      "POST /sessions": json(429, { error: { code: "quota_exceeded", message: "x", retryable: false, scope: "global" } }),
+    });
+    renderReport();
+    const button = await screen.findByRole("button", { name: "Treinar este caso de novo" });
+    await userEvent.click(button);
+    expect(
+      await screen.findByText("A demo atingiu o limite de hoje. Volte amanhã."),
+    ).toBeInTheDocument();
+    expect(button).toHaveAttribute("aria-disabled", "true");
+  });
+
   it("shows a toast on other errors", async () => {
     setup({ "POST /sessions": apiErr(500, "internal", true) });
     renderReport();
